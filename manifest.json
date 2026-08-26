@@ -1,7 +1,7 @@
 {
   "id": "Gen1BattleUI",
   "name": "Gen1BattleUI",
-  "version": "1.1.2",
+  "version": "1.2.0",
   "api": 2,
   "games": [
     "gen1"
@@ -22,6 +22,6 @@
   "permissions": [
     "engine_internals"
   ],
-  "description": "The battle command and move menus as four buttons in a 2x2 grid instead of a list, inside the Game Boy's own screen and the Game Boy's own chrome. FIGHT, PKMN, ITEM and RUN each get a box of their own; so do the four moves, with the full name, type and PP of the highlighted one in a panel above. Opening the bag leaves the buttons up and marks ITEM with a hollow hand rather than clearing them away. Dialogue still takes the bottom of the screen back for as long as it is talking. Both battle layouts, CLASSIC and WIDE.",
+  "description": "The battle command and move menus as four buttons in a 2x2 grid instead of a list, inside the Game Boy's own screen and the Game Boy's own chrome. FIGHT, PKMN, ITEM and RUN each get a box of their own; so do the four moves, printed whole -- a move menu that will not fit the 8px tile font is drawn in the engine's own Plain Pixel, which does. Opening the bag leaves the buttons up and marks ITEM with a hollow hand. Dialogue still takes the bottom of the screen back for as long as it is talking. Both battle layouts, CLASSIC and WIDE.",
   "github": "wild1walker/Gen1BattleUI"
 }

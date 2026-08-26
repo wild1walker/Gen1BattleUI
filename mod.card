@@ -14,6 +14,9 @@ return {
       .. "DisplayBattleMenu and MoveSelectionMenu are the two screens this "
       .. "re-dresses, and whose 2x2 reading of the menu index is why the "
       .. "command menu needed no new input handling" },
+    { who = "Douglas Vautour", for_ = "Plain Pixel (CC-BY 4.0), the face "
+      .. "Gen1Recomp bundles for its translation mode and this mod borrows "
+      .. "for move names that will not fit the tile font" },
     { who = "Nintendo / Creatures / GAME FREAK", for_ = "Pokemon Red, Blue "
       .. "and Yellow.  Unofficial fan mod, no affiliation, no endorsement" },
   },
@@ -30,6 +33,9 @@ return {
       "Mimic's copy menu is the same grid one tile row lower, matching the row the engine clips the player's picture to for it rather than for move select",
     },
     added = {
+      "move names print whole: the tile font is 8px a glyph and a classic cell is seven of them against Gen 1's twelve-glyph names, so a move menu that will not fit is drawn in Plain Pixel -- the TTF the engine already ships for its translation mode -- at the largest size whose twelve glyphs still fit the cell",
+      "a grid takes the small face for all four names or none, because GUST in one font beside THUNDERSHOCK in another reads as a rendering fault rather than a choice; a party whose names all fit is vanilla to the pixel, the command menu never moves, and the wide layout never reaches for it",
+      "FULL NAMES in the mod manager, on by default; off is the game's own font always and the cut comes back",
       "opening the bag leaves the buttons up and marks ITEM with a hollow hand rather than clearing them away: the item list is the one list in the game that is not a screen of its own (ListMenu's itemBox, isOpaque = false, sixteen tiles at (4,2)), so it stops at y=103 and the strip underneath it is still on screen",
       "that state is deliberately not claimed through battle.bottom_ui_visible -- a false for the battle would take the bag's own How many?, YES/NO and use message with it, since every box above a battle inherits the battle's answer -- so the engine keeps drawing its empty box and the buttons go over the top of it, into the same pixels",
       "a panel above the move grid with the highlighted move's name, its type and its PP -- which the vanilla list never showed at once -- keeping the footprint of the vanilla TYPE/PP box at (0,8) 11x5, because the player's own HUD runs across rows 7-11 from x=72 rightwards and a wider panel covers their HP while they choose a move",
@@ -37,6 +43,8 @@ return {
       "the mod's geometry on mod.exports, in tile coordinates, so a mod that wants to sit beside these buttons can find out where they are",
     },
     known = {
+      "the small face is NOT the game's font, so a font mod or a skin that redraws the tile sheet does not reach it -- unlike the boxes, which are Font.drawBox and do; that is the trade FULL NAMES makes, and off is the way out of it",
+      "the engine's own whole-game TTF mode is deliberately not switched on: that is a font swap for every screen in the game, and a battle mod has no business making one",
       "seven glyphs is seven glyphs: no arrangement of two columns inside 160 pixels gives THUNDERSHOCK its full name in a cell, and the panel above buys nine of them rather than all twelve -- the vanilla box it keeps the footprint of is eleven tiles, and the pixels either side of it are the player's own HP",
       "THROW ROCK is ten glyphs against seven in a Safari battle and reads THROW.; the widescreen layout has the room and prints it whole",
       "the overlay draws after the palette pass, so the buttons are black on white and are not recoloured by a COLORS zone the way the vanilla strip's border is -- the same picture on the default look, and not under a mode that tints the text box",

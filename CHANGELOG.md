@@ -1,5 +1,31 @@
 # Changelog
 
+## 1.2.0
+
+- **Move names print whole.** The tile font is 8 pixels a glyph and a classic
+  cell is seven of them; Gen 1's longest move names are twelve. That is
+  arithmetic about an 8x8 sheet, not a layout that could be tuned — in the
+  game's own font, a 2x2 grid *cannot* show `SELFDESTRUCT`.
+- So a move menu whose names do not all fit is drawn in **Plain Pixel**, the
+  TTF the engine already ships for its translation mode (`Font.PLAINPIXEL`,
+  CC-BY 4.0, Douglas Vautour). Its advance is narrower, and the same cell
+  holds twelve of it. The engine's own whole-game TTF mode is *not* switched
+  on — that is a font swap for the whole game, and a battle mod has no
+  business making one; the face is loaded and used for move names alone.
+- The size is chosen, not fixed: the largest one whose twelve glyphs still fit
+  the cell wins, so a different cell width or different font metrics resize it
+  rather than overflow it.
+- **A grid takes the small face for all four names or none.** `GUST` in one
+  font beside `THUNDERSHOCK` in another, in the same four boxes, reads as a
+  rendering fault rather than a choice. A party whose names all fit is still
+  vanilla to the pixel, the command menu never moves, and the wide layout —
+  twelve glyphs a cell already — never reaches for it at all.
+- The panel takes the **cells'** face, sized from the cell: chosen from the
+  panel's own width instead, the same name came out larger up there than on
+  the button it describes.
+- **`FULL NAMES`** in the mod manager, on by default. Off is the game's own
+  font always, and names are cut to the cell as before.
+
 ## 1.1.2
 
 No change to the mod. 1.1.1's tag carried a stray `mods/Gen1BattleUI` gitlink

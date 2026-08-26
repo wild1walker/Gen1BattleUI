@@ -105,7 +105,25 @@ local function record(battle)
   Font.drawCode = function(code, x, y)
     out.codes[#out.codes + 1] = { code = code, x = x, y = y }
   end
+  -- The small face does not go through Font at all -- it is a LOVE font
+  -- printed directly -- so recording only Font.draw would see a move menu
+  -- with no labels in it and call that a bug.  Both faces land in out.text;
+  -- `small` says which, and the width is measured through whichever font
+  -- was actually set.
+  local realPrint, realSetFont = love.graphics.print, love.graphics.setFont
+  local face
+  love.graphics.setFont = function(f) face = f; return realSetFont(f) end
+  love.graphics.print = function(text, x, y)
+    local w = 0
+    if face and face.getWidth then
+      local okw, v = pcall(face.getWidth, face, text)
+      w = okw and v or 0
+    end
+    out.text[#out.text + 1] = { text = tostring(text), x = x, y = y,
+                                w = w, small = true }
+  end
   local ok, err = pcall(Runtime.call, "battle.overlay", function() end, battle)
+  love.graphics.print, love.graphics.setFont = realPrint, realSetFont
   Font.draw, Font.drawBox, Font.drawCode = realDraw, realBox, realCode
   T.check(ok, "the overlay draws (" .. tostring(err) .. ")")
   return out
@@ -248,20 +266,21 @@ do
     end
   end
 
-  -- Nine glyphs is what that footprint leaves, against the cell's seven, so
-  -- the panel says more than the button under it and still not everything.
+  -- With FULL NAMES on the panel prints the name whole, in the small face,
+  -- and still inside its own box.
   local panelName
   for _, t in ipairs(drawn.text) do
     if t.y < STRIP_Y and t.text:match("^THUNDER") then panelName = t end
   end
   T.check(panelName ~= nil, "the panel names the highlighted move")
-  T.check(panelName and panelName.w <= 72,
-          "inside the nine glyphs its box has")
+  T.eq(panelName and panelName.text, "THUNDERSHOCK", "whole, not cut")
+  T.check(panelName and panelName.w <= 72, "inside the box it has")
 
-  local cellLabels = 0
+  local cellLabels, whole = 0, 0
   for _, t in ipairs(drawn.text) do
     if t.y >= 96 then
       cellLabels = cellLabels + 1
+      if not t.text:match("%.$") then whole = whole + 1 end
       T.check(t.w <= 56,
               ("%q is %d px, inside the 56 a cell has"):format(t.text, t.w))
       -- and it must not reach the border of the box it is in: the left
@@ -273,6 +292,7 @@ do
     end
   end
   T.eq(cellLabels, 4, "one label per button")
+  T.eq(whole, 4, "and every name printed whole, none of them cut")
 
   for _, t in ipairs(drawn.text) do
     T.check(t.x >= 0 and t.x + t.w <= 160,
@@ -585,6 +605,86 @@ do
   T.eq(WideBattle.moveGridIndex(1, 4, "down"), 3, "DOWN crosses the column")
   T.eq(WideBattle.moveGridIndex(2, 2, "down"), 2,
        "and a direction pointing at an empty slot holds")
+end
+
+-- ------- the small face, and when it is not reached for
+--
+-- The tile font is 8px a glyph and a classic cell is seven of them, so
+-- Gen 1's twelve-glyph names cannot fit in the game's own font however the
+-- boxes are arranged.  FULL NAMES draws a grid that does not fit through the
+-- engine's own Plain Pixel instead -- and only such a grid: a party whose
+-- names all fit stays on the tile font, to the pixel.
+
+local function faces(drawn, minY)
+  local tiles, small = 0, 0
+  for _, t in ipairs(drawn.text) do
+    if t.y >= (minY or 96) then
+      if t.small then small = small + 1 else tiles = tiles + 1 end
+    end
+  end
+  return tiles, small
+end
+
+do
+  local SHORT = {
+    { id = "S_A", pp = 10, ppUps = 0 }, { id = "S_B", pp = 10, ppUps = 0 },
+    { id = "S_C", pp = 10, ppUps = 0 }, { id = "S_D", pp = 10, ppUps = 0 },
+  }
+  Data.moves.S_A = { name = "GUST", type = "NORMAL", pp = 10 }
+  Data.moves.S_B = { name = "TACKLE", type = "NORMAL", pp = 10 }
+  Data.moves.S_C = { name = "GROWL", type = "NORMAL", pp = 10 }
+  Data.moves.S_D = { name = "SCRATCH", type = "NORMAL", pp = 10 }
+
+  local short = record(fakeBattle({ phase = "moveSelect", moves = SHORT }))
+  local tiles, small = faces(short)
+  T.eq(tiles, 4, "names that fit stay on the game's own font")
+  T.eq(small, 0, "and the small face is never reached for")
+
+  -- one name too long is enough to move the whole grid, so a cell is never
+  -- one font beside another
+  local MIXED = {
+    { id = "S_A", pp = 10, ppUps = 0 }, { id = "LONG_A", pp = 10, ppUps = 0 },
+    { id = "S_C", pp = 10, ppUps = 0 }, { id = "S_D", pp = 10, ppUps = 0 },
+  }
+  local mixed = record(fakeBattle({ phase = "moveSelect", moves = MIXED }))
+  local mtiles, msmall = faces(mixed)
+  T.eq(msmall, 4, "one name too wide moves all four to the small face")
+  T.eq(mtiles, 0, "and none is left behind on the tile font")
+
+  -- the command menu is four fixed words and never moves
+  local cmd = record(fakeBattle({ phase = "menu" }))
+  local ctiles, csmall = faces(cmd)
+  T.eq(csmall, 0, "the command menu is always the game's own font")
+  T.check(ctiles > 0, "and is drawn through it")
+end
+
+-- FULL NAMES off is the game's font always, and the cut comes back.
+do
+  run.loader.modOptions["Gen1BattleUI"] = { full_names = false }
+  local drawn = record(fakeBattle({ phase = "moveSelect", moves = {
+    { id = "LONG_A", pp = 10, ppUps = 0 }, { id = "LONG_B", pp = 10, ppUps = 0 },
+    { id = "LONG_C", pp = 10, ppUps = 0 }, { id = "LONG_D", pp = 10, ppUps = 0 },
+  } }))
+  local tiles, small = faces(drawn)
+  T.eq(small, 0, "FULL NAMES off never reaches for the small face")
+  T.eq(tiles, 4, "every label is the game's own font")
+  local cut = 0
+  for _, t in ipairs(drawn.text) do
+    if t.y >= 96 and t.text:match("%.$") then cut = cut + 1 end
+  end
+  T.check(cut > 0, "and a name too long for its cell is cut again")
+  run.loader.modOptions["Gen1BattleUI"] = nil
+end
+
+-- The wide layout's cells are twelve glyphs, which is what Gen 1's longest
+-- name needs, so it never reaches for the small face either.
+do
+  local drawn = record(fakeBattle({ phase = "moveSelect", wide = true, moves = {
+    { id = "LONG_A", pp = 10, ppUps = 0 }, { id = "LONG_B", pp = 10, ppUps = 0 },
+    { id = "LONG_C", pp = 10, ppUps = 0 }, { id = "LONG_D", pp = 10, ppUps = 0 },
+  } }))
+  local _, small = faces(drawn, 104)
+  T.eq(small, 0, "wide keeps the game's own font: its cells already fit")
 end
 
 -- ------- the bag's own scrolling is not this mod's

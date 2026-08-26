@@ -117,8 +117,26 @@ move. It is also what keeps everything *else* clear: anything another mod
 draws on that side of the screen — an EXP bar, for one — was laid out around
 the vanilla box, not around this one.
 
-So the panel is nine glyphs against the cell's seven: `QUICK ATTACK` reads
-`QUICK AT.` there and `QUICK.` on the button.
+So the panel is nine glyphs against the cell's seven — which is still not
+twelve, and twelve is what Gen 1's longest move names are.
+
+### Which is why there is a second font
+
+The tile font is 8 pixels a glyph and cannot be anything else: it is a tile
+sheet. A cell is seven of them. So in the game's own font a 2×2 grid **cannot**
+print `SELFDESTRUCT`, whatever the boxes do.
+
+A move menu whose names do not all fit is drawn in **Plain Pixel** instead —
+the TTF the engine already ships for its translation mode. Its advance is
+narrower, and the same cell holds twelve of it. The engine's own whole-game
+TTF mode is *not* switched on; the face is loaded and used for move names
+alone. The size is chosen rather than fixed: the largest one whose twelve
+glyphs still fit wins.
+
+A grid takes it for **all four names or none** — `GUST` in one font beside
+`THUNDERSHOCK` in another reads as a fault, not a choice. So a party whose
+names all fit is vanilla to the pixel, the command menu never moves, and the
+wide layout never reaches for it. **`FULL NAMES`** turns it off.
 
 **`MOVE PANEL`** in the mod manager turns it off and gives the picture behind
 it back.
@@ -144,6 +162,7 @@ panel keeps its ten tiles on the right.
 
 | Row | Default | What it does |
 | --- | --- | --- |
+| `FULL NAMES` | on | Move names in the engine's Plain Pixel when they will not fit the tile font, so they print whole. Off is the game's own font always, and long names are cut to the cell. |
 | `MOVE PANEL` | on | The name, type and PP of the highlighted move, above the grid, in the vanilla `TYPE/PP` box's footprint. Off gives the picture behind it back — and, on the wide layout, gives its ten tiles to the grid, because a strip that stops short of the screen edge is a hole in the frame rather than a saving. |
 
 ---
@@ -160,11 +179,12 @@ panel keeps its ten tiles on the right.
 
 ## Known
 
-- **Seven glyphs is seven glyphs.** `THUNDERSHOCK` reads `THUNDE.` in its
-  cell, and no arrangement of two columns inside 160 pixels changes that. The
-  panel buys nine of the twelve back, not all of them — it is eleven tiles
-  because the pixels either side of it are the player's own HP — and turning
-  it off is choosing not to have even those.
+- **Seven glyphs is seven glyphs in the tile font,** and no arrangement of two
+  columns inside 160 pixels changes that. `FULL NAMES` is the way out and it
+  is a second face, not a cleverer layout; turning it off puts the cut back.
+- **The small face is not the game's font,** so a font mod or a skin that
+  redraws the tile sheet does not reach it — unlike the boxes, which are
+  `Font.drawBox` and do. That is the trade `FULL NAMES` makes.
 - **`THROW ROCK` is cut in a Safari battle** — ten glyphs against seven. It
   reads `THROW.`, with the trailing space taken off the cut rather than left
   as `THROW .`. The wide layout has room and prints it whole.
@@ -196,6 +216,8 @@ wild1walker/Gen1Wild
 - **pret/pokered** — `engine/battle/core.asm`, whose `DisplayBattleMenu` and
   `MoveSelectionMenu` are the two screens this re-dresses, and whose 2×2
   reading of `menuIndex` is why the command menu needed no new input handling.
+- **Plain Pixel** by Douglas Vautour (CC-BY 4.0), which Gen1Recomp bundles for
+  its translation mode and which this mod borrows for move names.
 - **Nintendo / Creatures / GAME FREAK** — Pokémon Red, Blue and Yellow.
   Unofficial fan mod, no affiliation, no endorsement.
 
