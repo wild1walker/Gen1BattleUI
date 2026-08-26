@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.1.2
+
+No change to the mod. 1.1.1's tag carried a stray `mods/Gen1BattleUI` gitlink
+— a copy of this repo committed inside itself from a test-harness copy run in
+the wrong directory. `git archive` skips gitlinks, so the 1.1.1 archive was
+never affected and neither was anything installed from it; what it broke was a
+**recursive** clone of the tag, which is how Gen1WildUI checks this repo out
+as a submodule:
+
+```
+fatal: No url found for submodule path 'upstream/Gen1BattleUI/mods/Gen1BattleUI'
+```
+
+Removing it from `main` did not fix the tag, so this is a clean tag to pin to.
+`mods/` is now in `.gitignore`.
+
 ## 1.1.1
 
 - **The move panel no longer covers the player's HP.** 1.1.0 drew it twenty
