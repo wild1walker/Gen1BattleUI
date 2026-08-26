@@ -1,0 +1,2 @@
+# Exact relative paths; dot-directories (.git, .github) are skipped already.
+tests/gen1battleui_test.lua
