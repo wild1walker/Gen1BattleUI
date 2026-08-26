@@ -217,6 +217,80 @@ back with two flags moved between them, so everything queued after them stays
 exactly where it was. **`LEVEL-UP BOX`** turns it off and gives the engine's
 two screens back.
 
+### The ball you threw is the ball you see
+
+Under **`COLORS = ADVANCED`** every sprite in a battle takes its colour from
+the SGB zone underneath it, and a thrown ball is a sprite like any other — so
+a `GREAT BALL` and an `ULTRA BALL` came out the same colour as each other and
+as the grass behind them. Now the toss, the wobbles and the ball resting
+through the caught text are each ball's own colours: red, blue, gold, purple,
+olive.
+
+There is one place that is decided — `BattleState:animSpriteColors`, the funnel
+`drawAnimLayer` builds its colour function from for the playing animation and
+the resting ball alike — so there is one wrap, and it hands the engine's own
+answer straight back for every sprite that is not a ball.
+
+**The band along the seam is a third colour a two-tone sprite does not have.**
+The ball tiles do use all three opaque DMG indices — the bottom crescent, the
+body mass, the outline ring — but vanilla's `rOBP0` shade map collapses two of
+them onto one shade, and the pixels a real Poké Ball's band runs through are
+*body* pixels, indistinguishable from the rest of it. So the band comes with
+re-indexed art: a copy of the sheet in which those pixels move onto index 3 and
+the outline ring moves onto 2. Painted `{ accent, body, line }` that is the
+band; painted `{ accent, body, body }` it is pixel-identical to vanilla, which
+is what a ball with no band and a player with **`BALL BAND`** off both get.
+
+That copy is rebuilt at runtime from **your own** extracted sheet. This art is
+ROM-derived, the engine is built so Nintendo's graphics come out of your
+cartridge and are never redistributed, and a mod has no business being the
+exception: what ships here is a table of which pixels play which part.
+
+The `MASTER` and `ULTRA` tosses keep their palette strobe, in their own
+colours now — and the band holds still through it, because `OBJ_SHADES` leaves
+index 3 on the dark shade in both halves of the flash. Poof clouds and every
+other battle animation are left exactly as vanilla, and so is every colour
+mode that is not `ADVANCED`: those deliberately have no per-sprite colour to
+give, and their `nil` is passed straight through.
+
+### And at the Pokémon Center
+
+The heal machine lights one ball per party member and painted all six the
+same. Now each one is the ball that Pokémon was **caught** in — a party of
+`GREAT BALL` catches heals blue.
+
+Nothing in the engine records what caught a Pokémon, so this does:
+`pokemon.caught` carries the live mon and the ball id, and an arbitrary field
+on a mon survives the save, because `SaveSerializer` is a generic recursive
+dump. It is written only into an empty field and never over one, which is the
+rule that lets this share a save with the mod it came from. Anything caught
+before you installed this reads as a `POKE BALL`, and corrects itself as the
+party turns over.
+
+`fxHeal` is a *local* closure inside `OverworldState:drawWorld` and cannot be
+wrapped, and drawing after `drawWorld` returns lands in the wrong space — so
+`drawWorld` is wrapped instead, and only while a heal is actually running is
+`love.graphics.draw` shimmed. The shim recognises the ball draws exactly (that
+image, that quad), counts them, and the i-th is party slot i, because the
+machine lights them in party order. It paints through the same shader the
+machine's own jingle flash uses, so a recoloured ball flashes with the rest of
+the machine instead of sitting still through it.
+
+### Where this came from, and what was left behind
+
+The colours and the two seams are **[Pokeball
+Colors](https://github.com/mistermiracle3036/Pokeball-Colors)** by Mister
+Miracle (MIT), ported down to what Red, Blue and Yellow actually ship: the five
+native balls and nothing else.
+
+Left behind on purpose: its `registerColors` and `registerColorResolver`
+registries, the colours it keeps for **Custom Poké Balls**, **Too Many Balls**
+and **Snag Quest**, its Gold heal machine, and its dev toggle that stocks every
+ball in every mart. A ball from a mod is that mod's business, and that mod is
+where it is answered — **install Pokeball Colors and this file stands down
+whole**, colours and Center and all, rather than the two of them wrapping one
+funnel and arguing about it.
+
 ---
 
 ## Options
@@ -227,6 +301,9 @@ two screens back.
 | `XP BAR` | on | A Gen 2 style experience bar under your Pokémon, filling towards the next level, with Gen 2's fill-hold-burst-refill on a level up. Drawn before the move panel, so the panel covers it rather than the other way round. |
 | `TYPE COLOUR` | on | The type in the panel and each move name on its button, in that type's own colour, drawn through a shader that inks the game's own glyphs. Off is plain black text. |
 | `LEVEL-UP BOX` | on | The level-up stat window over the `grew to level` line rather than after it, dismissed together, the way `text_end` + `PrintStatsBox` prints it in the ROM. Off is the engine's two screens, with the text box under the window blank. |
+| `BALL COLOUR` | on | The ball you throw in its own colours — the toss, the wobbles and the ball resting through the caught text — for the five balls Red, Blue and Yellow ship with. `COLORS = ADVANCED` only; the mono modes have no per-sprite colour to give and are passed through whatever this says. |
+| `BALL BAND` | on | The black band along a thrown ball's seam, which needs the re-indexed art to have a third region to paint. Off is the two-tone ball on the game's own tiles, which is what a thrown ball looked like before it. |
+| `CENTER BALLS` | on | The Pokémon Center heal machine, lighting each ball in the colours of the ball that Pokémon was caught in. Off is the machine's own one palette for all six. |
 | `FULL NAMES` | off | Move names in the engine's Plain Pixel when they will not fit the tile font, so they print whole in the buttons too. Off — the default — is the game's own font always, cut to the cell, and the panel above is what reads the whole name. |
 
 ---
@@ -273,6 +350,25 @@ two screens back.
 - **A `RARE CANDY` outside a battle is unchanged.** That level-up is the
   party menu's, printed through the map's own text box, and this is a battle
   mod.
+- **The first ball of a session has no band.** The re-indexed sheet is only
+  safe to serve once this mod's palette has been seen to reach a ball, because
+  anything that blits it raw draws a grey ball with a black stripe — which is
+  exactly what a sprite pack that ships its own pre-coloured ball art and
+  suppresses the palette pass does. So the first throw is the two-tone ball and
+  the band arrives with the second; and if that contradiction ever does turn
+  up, the band switches off for the session and the other mod's own artwork
+  shows through, which is the right outcome — their balls are already coloured.
+- **A ball from another mod keeps its vanilla colours,** and says so once in
+  the log naming the ball. This mod covers the five native balls; Pokeball
+  Colors is the mod that covers the rest, and installing it stands this one
+  down entirely.
+- **The `ULTRA BALL` looks like it turns over during the toss.** That is the
+  Master/Ultra palette flicker, which is on the hardware, in the ball's own
+  colours now — and it stops at the wobbles because `SHAKE_ANIM` never
+  flickers.
+- **Pokémon caught before this installed heal as `POKE BALL`,** because there
+  was nothing recording what caught them. It corrects itself as the party
+  turns over.
 - **A throw while drawing costs a frame's buttons, not the battle.** The draw
   is wrapped and logged; a load-time failure is *not* swallowed, and marks the
   row enabled-but-broken in `MODS` with the reason, because an enabled mod
@@ -303,7 +399,13 @@ wild1walker/Gen1Wild
 - **[unxpected-uxp](https://github.com/unxpected-uxp/pokemon-gen1-recomp-mod-qol)**
   — the XP bar, from their Quality of Life mod by way of Gen1WildQOL, which
   maintained it and wrote the faint guard it still carries.
+- **[Pokeball Colors](https://github.com/mistermiracle3036/Pokeball-Colors)**
+  by Mister Miracle (MIT) — the ball colours, the band's re-indexing table and
+  both seams the ball colouring is drawn through. Ported here for the five
+  native balls; its whole other-mods surface stays over there, and this mod
+  stands down when it is installed.
 - **Nintendo / Creatures / GAME FREAK** — Pokémon Red, Blue and Yellow.
   Unofficial fan mod, no affiliation, no endorsement.
 
-MIT. See [LICENSE](LICENSE).
+MIT. See [LICENSE](LICENSE) and
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

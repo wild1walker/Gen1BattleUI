@@ -1,5 +1,54 @@
 # Changelog
 
+## 1.5.0
+
+- **The ball you throw is coloured as itself.** Under `COLORS = ADVANCED`
+  every sprite in a battle takes its colour from the SGB zone underneath it,
+  and a thrown ball is a sprite like any other — so a GREAT BALL and an ULTRA
+  BALL came out the same colour as each other and as the grass behind them.
+  The toss, the wobbles and the ball resting through the caught text are now
+  each ball's own: red, blue, gold, purple, olive.
+- **And at the Pokémon Center.** The heal machine lit one ball per party
+  member and painted all six the same; each one is now the ball that Pokémon
+  was *caught* in. Nothing in the engine records that, so this does —
+  `pokemon.caught` carries the live mon and the ball id, and an arbitrary
+  field on a mon survives the save. Written only into an empty field and never
+  over one, which is the rule that lets it share a save with the mod it came
+  from. Anything caught before this installed heals as a POKE BALL and
+  corrects itself as the party turns over.
+- **Ported from [Pokeball
+  Colors](https://github.com/mistermiracle3036/Pokeball-Colors)** by Mister
+  Miracle (MIT), cut to what Red, Blue and Yellow actually ship: the five
+  native balls. Its `registerColors` and `registerColorResolver` registries,
+  its colours for Custom Poké Balls, Too Many Balls and Snag Quest, its Gold
+  heal machine and its every-ball-in-marts dev toggle are all deliberately
+  left over there. **Install that mod and this one stands down whole** —
+  colours, Center and all — rather than the two of them wrapping one funnel
+  and arguing about it.
+- **The band along the seam is a third colour a two-tone sprite does not
+  have.** The ball tiles do use all three opaque DMG indices, but vanilla's
+  `rOBP0` map collapses two of them onto one shade, and the pixels a real
+  Poké Ball's band runs through are *body* pixels. So the band comes with
+  re-indexed art — the seam onto index 3, the outline ring onto 2 — rebuilt at
+  runtime from **your own** extracted sheet, because this art is ROM-derived
+  and the engine is built so it never leaves your cartridge. Painted
+  `{ accent, body, body }` that sheet is pixel-identical to vanilla, which is
+  what `BALL BAND` off gives back.
+- **One correction to what was ported.** `OBJ_SHADES` maps index 3 to the dark
+  shade in *both* halves of the Master/Ultra flicker, so the outline ring does
+  not take part in the flash. The original works its fallback out after the
+  swap, so a ball with no band renders that ring in its accent for the flashed
+  frames — and of the five native balls the one with no band is the ULTRA
+  BALL, which is also one of the two that flicker. Here the band and its
+  fallback are both taken from the unswapped body and only the pair swaps.
+- **`BALL COLOUR`, `BALL BAND` and `CENTER BALLS`** in the mod manager, all on
+  by default. `ADVANCED` only, throughout: the mono modes deliberately have no
+  per-sprite colour to give, and their `nil` is passed straight through.
+- The suite drives the engine's own `ballChain` and `AnimPlayer.start` and
+  reads the colours back out of `animSpriteColors`, so "every sprite that is
+  not a ball comes back exactly as the engine coloured it" is checked against
+  the engine's own answer rather than asserted.
+
 ## 1.4.0
 
 - **The level-up stat box comes up over the line that announced it.** Reported

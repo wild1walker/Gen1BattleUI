@@ -1172,6 +1172,253 @@ do
   end
 end
 
+-- ------- the ball you threw is the ball you see
+--
+-- The ball colouring is the one part of this mod that is not a hook,
+-- because there is no hook to ask for it: BattleState:animSpriteColors is
+-- the single funnel every anim-layer OAM sprite's colour comes out of, and
+-- the heal machine's balls are drawn from a closure inside
+-- OverworldState:drawWorld.  Both are wrapped directly, so what is checked
+-- here is that they are wrapped AROUND the engine rather than over it --
+-- every sprite that is not a ball comes back with the engine's own answer,
+-- byte for byte.
+--
+-- Driven through the engine's own entry points (ballChain, AnimPlayer.start)
+-- rather than by poking the trackers, because "which ball is in flight" is
+-- the half of this that has to survive an engine that renames a field.
+
+do
+  local BattleState = require("src.battle.BattleState")
+  local AnimPlayer = require("src.battle.AnimPlayer")
+  local PaletteFX = require("src.render.PaletteFX")
+  local OverworldState = require("src.world.OverworldController")
+
+  local colors = exports.ballColors
+  T.check(type(colors) == "table", "the mod publishes its ball colours")
+
+  local ids = {}
+  for id in pairs(colors or {}) do ids[#ids + 1] = id end
+  table.sort(ids)
+  T.eq(table.concat(ids, " "),
+       "GREAT_BALL MASTER_BALL POKE_BALL SAFARI_BALL ULTRA_BALL",
+       "and they are the five Red, Blue and Yellow ship with, no more")
+  for _, id in ipairs(ids) do
+    local c = colors[id]
+    T.check(type(c.body) == "table" and #c.body == 3
+            and type(c.accent) == "table" and #c.accent == 3,
+            id .. " has a body colour and an accent")
+  end
+  -- the band needs somewhere to read: a black line against a near-black
+  -- crescent shows nothing, which is why this one ball has none
+  T.eq(colors.ULTRA_BALL.line, nil, "the ULTRA BALL is the one with no band")
+
+  -- ------- a battle mid-throw
+  --
+  -- The zone palette the engine would have used, so a pass-through is
+  -- recognisable: any of these four coming back means the engine answered
+  -- and we did not.
+  local ZONE = { { 255, 255, 255 }, { 170, 170, 170 },
+                 { 85, 85, 85 }, { 0, 0, 0 } }
+
+  local function rgb(c)
+    return table.concat({ math.floor(c[1] * 255 + 0.5),
+                          math.floor(c[2] * 255 + 0.5),
+                          math.floor(c[3] * 255 + 0.5) }, ",")
+  end
+  local function shown(out)
+    if not out then return "nil" end
+    return rgb(out[1]) .. " / " .. rgb(out[2]) .. " / " .. rgb(out[3])
+  end
+  local function want(c) return table.concat(c, ",") end
+
+  -- the fields ballChain and start actually touch, and nothing else: the
+  -- queue they push into is not what any claim here is about
+  local function thrower()
+    local ap = setmetatable({ data = {}, warnOnce = function() end },
+                            { __index = AnimPlayer })
+    local battle = {
+      animPlaying = true,
+      animPlayer = ap,
+      animNext = function() end,
+      actNext = function() end,
+      zoneColorsAt = function() return ZONE end,
+    }
+    return battle, ap
+  end
+
+  local function toss(battle, ap, ball, move)
+    -- the chain sees the ball for the whole toss/poof/shake; the row sees
+    -- it only on the toss itself, which is the pair of trackers
+    BattleState.ballChain(battle, move or "TOSS_ANIM", true, 3, ball)
+    AnimPlayer.start(ap, move or "TOSS_ANIM", true,
+                     move == "SHAKE_ANIM" and {} or { ball = ball })
+  end
+
+  local function colorsOf(battle, obp)
+    return BattleState.animSpriteColors(battle, { obp = obp or "f0",
+                                                  x = 80, y = 60 }, 72, 44)
+  end
+
+  local previousMode = PaletteFX.mode
+  PaletteFX.mode = "redpp"
+
+  do
+    local battle, ap = thrower()
+    toss(battle, ap, "GREAT_BALL")
+
+    -- the first ball of a session has no band: the re-indexed sheet is
+    -- only safe to serve once our palette has been seen to land on one,
+    -- because anything that blits it raw draws a grey ball with a black
+    -- stripe.  So the first throw is the two-tone ball and the band
+    -- arrives with the second.
+    local first = colorsOf(battle)
+    T.check(first ~= nil, "a GREAT BALL toss is coloured by this mod")
+    T.eq(rgb(first[1]), want(colors.GREAT_BALL.accent),
+         "its highlight is the ball's accent")
+    T.eq(rgb(first[2]), want(colors.GREAT_BALL.body),
+         "and the body mass is the ball's body")
+    T.eq(rgb(first[3]), want(colors.GREAT_BALL.body),
+         "with no band on the first throw of a session")
+
+    local second = colorsOf(battle)
+    T.eq(rgb(second[3]), "0,0,0",
+         "and the band from the second, once the palette is known to land")
+
+    -- f0x is the block DoBallTossSpecialEffects has complemented, which is
+    -- the MASTER/ULTRA flash.  OBJ_SHADES says { 3, 0, 3 }: indices 1 and
+    -- 2 swap and index 3 stays on the dark shade, so the band holds still
+    -- through the flicker rather than strobing with the rest of the ball.
+    local flashed = colorsOf(battle, "f0x")
+    T.eq(rgb(flashed[1]), want(colors.GREAT_BALL.body),
+         "the flicker swaps the pair: the body takes the light slot")
+    T.eq(rgb(flashed[2]), want(colors.GREAT_BALL.accent),
+         "and the accent the dark one")
+    T.eq(rgb(flashed[3]), "0,0,0", "while the band does not flicker at all")
+  end
+
+  -- The ULTRA BALL has no band, so its third slot falls back to the body --
+  -- and it has to stay the body through the flicker too, because that slot
+  -- is index 3 and the map leaves index 3 alone.  This is the ball where it
+  -- shows: it is one of the two that flash.
+  do
+    local battle, ap = thrower()
+    toss(battle, ap, "ULTRA_BALL")
+    colorsOf(battle)
+    local flashed = colorsOf(battle, "f0x")
+    T.eq(rgb(flashed[3]), want(colors.ULTRA_BALL.body),
+         "a bandless ball keeps its outline on the dark shade while it flashes")
+  end
+
+  -- SHAKE_ANIM rows carry the shake count and not the ball, and the
+  -- resting caught ball is not an animation at all -- both are why the
+  -- chain remembers the ball rather than the row being asked for it.
+  do
+    local battle, ap = thrower()
+    toss(battle, ap, "MASTER_BALL", "SHAKE_ANIM")
+    T.eq(rgb(colorsOf(battle)[2]), want(colors.MASTER_BALL.body),
+         "the wobbles are the ball's colour, from the chain and not the row")
+
+    battle.animPlaying, battle.lockedBall = false, { {} }
+    T.eq(rgb(colorsOf(battle)[2]), want(colors.MASTER_BALL.body),
+         "and so is the ball resting through the caught text")
+  end
+
+  -- ------- everything that is not a ball is the engine's own answer
+  do
+    local battle, ap = thrower()
+    toss(battle, ap, "POKE_BALL")
+    colorsOf(battle)   -- the ball itself, so this chain is one we painted
+
+    -- rOBP1 and the ambient-e4 sprites are the move animations and the
+    -- emitters: this mod has no business in any of them
+    T.eq(shown(colorsOf(battle, "obp1")),
+         shown(BattleState._g1bOriginals.animSpriteColors(
+                 battle, { obp = "obp1", x = 80, y = 60 }, 72, 44)),
+         "an rOBP1 sprite comes back exactly as the engine coloured it")
+    T.eq(shown(colorsOf(battle, "e4")),
+         shown(BattleState._g1bOriginals.animSpriteColors(
+                 battle, { obp = "e4", x = 80, y = 60 }, 72, 44)),
+         "and so does an ambient one")
+
+  end
+
+  -- a ball this mod has no colour for -- anything another ball mod adds
+  do
+    local battle, ap = thrower()
+    toss(battle, ap, "GS_BALL")
+    T.eq(shown(colorsOf(battle)),
+         shown(BattleState._g1bOriginals.animSpriteColors(
+                 battle, { obp = "f0", x = 80, y = 60 }, 72, 44)),
+         "and a ball from another mod keeps its vanilla colours")
+  end
+
+  -- The mono and classic colour modes deliberately have no per-sprite
+  -- colour to give: animSpriteColors is asked for one and the answer is
+  -- the same nil it would have been with no mod loaded.
+  do
+    local battle, ap = thrower()
+    toss(battle, ap, "POKE_BALL")
+    PaletteFX.mode = "gbc"
+    T.eq(shown(colorsOf(battle)),
+         shown(BattleState._g1bOriginals.animSpriteColors(
+                 battle, { obp = "f0", x = 80, y = 60 }, 72, 44)),
+         "outside ADVANCED the ball is the engine's, whatever the option says")
+    PaletteFX.mode = "redpp"
+  end
+
+  -- BALL COLOUR off is the same picture as no mod at all.
+  do
+    local battle, ap = thrower()
+    toss(battle, ap, "POKE_BALL")
+    run.loader.modOptions["Gen1BattleUI"] = { ball_colour = false }
+    T.eq(shown(colorsOf(battle)),
+         shown(BattleState._g1bOriginals.animSpriteColors(
+                 battle, { obp = "f0", x = 80, y = 60 }, 72, 44)),
+         "BALL COLOUR off gives the engine's own ball back")
+    -- and BALL BAND off is the two-tone ball, still in the ball's colours
+    run.loader.modOptions["Gen1BattleUI"] = { ball_band = false }
+    local out = colorsOf(battle)
+    T.eq(rgb(out[2]), want(colors.POKE_BALL.body),
+         "BALL BAND off keeps the colour")
+    T.eq(rgb(out[3]), want(colors.POKE_BALL.body), "and drops the band")
+    run.loader.modOptions["Gen1BattleUI"] = nil
+  end
+
+  PaletteFX.mode = previousMode
+
+  -- ------- what caught this Pokemon
+  --
+  -- The engine records it nowhere, so this mod does -- and writes it only
+  -- into an empty field, which is the rule that lets it share a save with
+  -- the mod this came from.
+  do
+    local mon = {}
+    Runtime.emit("pokemon.caught", { mon = mon, ball = "GREAT_BALL" })
+    T.eq(mon.caughtBall, "GREAT_BALL", "a catch records the ball that made it")
+    Runtime.emit("pokemon.caught", { mon = mon, ball = "POKE_BALL" })
+    T.eq(mon.caughtBall, "GREAT_BALL",
+         "and a field already written is never written over")
+  end
+
+  -- ------- the Pokemon Center
+  --
+  -- The machine is wrapped, and the wrap is inert on every frame that is
+  -- not a heal: no healAnim, no shim, and drawWorld is the engine's own.
+  T.check(type(OverworldState._g1bOriginals) == "table"
+          and type(OverworldState._g1bOriginals.drawWorld) == "function",
+          "the Pokemon Center's draw is wrapped, with the original kept")
+  do
+    local world = { healAnim = nil }
+    local reached = false
+    OverworldState._g1bOriginals.drawWorld = function() reached = true end
+    local vanillaDraw = love.graphics.draw
+    OverworldState.drawWorld(world)
+    T.check(reached, "a map with no heal running still draws")
+    T.eq(love.graphics.draw, vanillaDraw,
+         "and love.graphics.draw is left alone on every frame but a heal's")
+  end
+end
+
 -- ------- the bag's own scrolling is not this mod's
 --
 -- Reported as "the item screen sometimes scrolls a bunch".  It is the
