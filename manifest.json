@@ -1,7 +1,7 @@
 {
   "id": "Gen1BattleUI",
   "name": "Gen1BattleUI",
-  "version": "1.5.0",
+  "version": "1.5.1",
   "api": 2,
   "games": [
     "gen1"
@@ -13,8 +13,7 @@
   "priority": 1100,
   "dependencies": [],
   "optional_dependencies": [
-    "gen1arena",
-    "gen1_wild_ui"
+    "gen1arena"
   ],
   "conflicts": [
     "modern_battle_ui"

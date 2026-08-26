@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.5.1
+
+Drops `gen1_wild_ui` from `optional_dependencies`. It could never be
+satisfied: [Gen1WildUI](https://github.com/wild1walker/Gen1WildUI) carries this
+mod as its `BATTLE MENUS` feature and lists `Gen1BattleUI` in its `conflicts`,
+so the two are mutually exclusive by design and the engine will not have both
+installed for the optional dependency to find. The entry predates that
+conflict.
+
+It is also what every other mod in the suite does: the bundle names the
+standalone it absorbs, and the standalone says nothing about the bundle.
+Nothing else changed.
+
 ## 1.5.0
 
 - **The ball you throw is coloured as itself.** Under `COLORS = ADVANCED`
