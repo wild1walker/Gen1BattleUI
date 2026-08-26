@@ -1,5 +1,29 @@
 # Changelog
 
+## 1.1.0
+
+- **`ITEM` no longer clears the buttons away.** The bag's item list is the one
+  list in the game that is not a screen of its own — `ListMenu`'s `itemBox`,
+  `isOpaque = false`, sixteen tiles at (4,2), so it stops at y=103 and the
+  strip underneath it stays on screen. `openItems` sets the phase to
+  `messages` with nothing to say, so what was drawn down there was the
+  engine's empty text box. Now the menu it was opened from stays up, with the
+  hand left **hollow** on `ITEM` — the same marker every list in the game
+  leaves on the row it is acting on.
+- That state is deliberately **not** claimed through
+  `battle.bottom_ui_visible`. Returning `false` for the battle would take the
+  bag's own boxes down with it — `How many?`, the `YES`/`NO`, the use message
+  — because every box above a battle inherits the battle's answer
+  (`src/battle/UIVisibility.lua`). The engine keeps drawing its empty box and
+  the buttons go over the top of it, which lands in the same pixels: the four
+  button boxes tile exactly the twenty-by-six that box occupies.
+- `PKMN` reaches the same code and is never seen down it: `PartyMenu` is
+  opaque, so the stack stops drawing at it and the battle underneath — this
+  mod's overlay included — never runs.
+- The two cursors now come from the engine's own `Theme.cursor` and
+  `Theme.cursorHollow` rather than being written out here, so a skin that
+  restyles the arrow restyles these with it.
+
 ## 1.0.0
 
 First release.

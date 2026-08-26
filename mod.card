@@ -20,6 +20,7 @@ return {
   compat = { engine = ">=0.0.0-0 <2.0.0", modApi = 2, games = { "gen1" } },
   differences = {
     changed = {
+      "the two cursors come from the engine's own Theme.cursor and Theme.cursorHollow rather than being written out in the mod, so a skin that restyles the arrow restyles these with it",
       "the command menu is four bordered boxes in a 2x2 rather than four words in one box: four 10x3 boxes tiling the classic layout's twenty-by-six bottom strip exactly, which is what three tile rows per button and two rows of buttons comes to",
       "a button is Font.drawBox -- the same call, the same border glyphs and the same white interior every text box in the game is made of -- so a skin or a font mod that redraws the border redraws these buttons with it",
       "the move menu is the same grid rather than a vertical list of four, with the engine's own battle.move_grid_navigation answered so LEFT and RIGHT cross it",
@@ -29,6 +30,8 @@ return {
       "Mimic's copy menu is the same grid one tile row lower, matching the row the engine clips the player's picture to for it rather than for move select",
     },
     added = {
+      "opening the bag leaves the buttons up and marks ITEM with a hollow hand rather than clearing them away: the item list is the one list in the game that is not a screen of its own (ListMenu's itemBox, isOpaque = false, sixteen tiles at (4,2)), so it stops at y=103 and the strip underneath it is still on screen",
+      "that state is deliberately not claimed through battle.bottom_ui_visible -- a false for the battle would take the bag's own How many?, YES/NO and use message with it, since every box above a battle inherits the battle's answer -- so the engine keeps drawing its empty box and the buttons go over the top of it, into the same pixels",
       "a panel above the move grid with the highlighted move's FULL name, its type and its PP -- which the vanilla list never showed at once -- in the place the vanilla TYPE/PP box occupied and covering what it covered",
       "MOVE PANEL in the mod manager, which gives the picture behind it back, and on the widescreen layout gives its ten tiles to the grid rather than leaving a hole in the frame",
       "the mod's geometry on mod.exports, in tile coordinates, so a mod that wants to sit beside these buttons can find out where they are",
@@ -39,6 +42,7 @@ return {
       "the overlay draws after the palette pass, so the buttons are black on white and are not recoloured by a COLORS zone the way the vanilla strip's border is -- the same picture on the default look, and not under a mode that tints the text box",
       "nothing about what the menus DO is replaced: every index, key and callback is still the engine's, so anything wrong with what the battle menu does is not this mod",
       "the strip is claimed only while the battle is the TOP of the state stack, because opening the party or the bag leaves the battle on phase menu the whole time that screen is up -- claiming on the phase alone would take those screens' own prompts down with it",
+      "PKMN reaches the same parked path as ITEM and is never seen down it: PartyMenu is opaque, so the stack stops drawing at it and the battle underneath -- this mod's overlay included -- never runs at all",
       "a throw while drawing costs a frame's buttons and is logged; a LOAD-time failure is not swallowed, and marks the row enabled-but-broken in MODS with the reason, because an enabled mod that silently changes nothing looks exactly like one that was never installed",
     },
   },

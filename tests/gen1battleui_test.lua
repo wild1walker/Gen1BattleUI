@@ -71,6 +71,8 @@ local function fakeBattle(o)
     safari = o.safari,
     demo = o.demo,
     demoTimer = o.demoTimer,
+    afterQueue = o.afterQueue,
+    current = o.current,
     mimicMoves = o.mimicMoves or MOVES,
     player = { name = "PIDGEOTTO", curMoves = o.moves or MOVES,
                disabledSlot = o.disabled },
@@ -79,8 +81,11 @@ local function fakeBattle(o)
   battle.game = { stack = stack, data = Data }
   function battle:wideLayout() return self.wide end
   stack.states[1] = battle
-  -- a party or bag screen opened from the menu sits above the battle
+  -- a party or bag screen opened from the menu sits above the battle.  The
+  -- party menu is opaque and stops the battle drawing at all; the bag's item
+  -- list is not (ListMenu's itemBox), which is why the strip shows under it.
   if o.covered then stack.states[2] = { isOpaque = true } end
+  if o.bag then stack.states[2] = { isOpaque = false } end
   return battle
 end
 
@@ -123,11 +128,24 @@ local function hands(drawn)
   return out
 end
 
+local function hollows(drawn)
+  local out = {}
+  for _, c in ipairs(drawn.codes) do
+    if c.code == 0xEC then out[#out + 1] = c end
+  end
+  return out
+end
+
 local function findText(drawn, text)
   for _, t in ipairs(drawn.text) do
     if t.text == text then return t end
   end
   return nil
+end
+
+local function bottomVisible(battle)
+  return Runtime.call("battle.bottom_ui_visible",
+                      function() return true end, battle)
 end
 
 -- ------- the classic layout: four boxes tiling rows 12-17
@@ -399,12 +417,85 @@ do
   run.loader.modOptions["Gen1BattleUI"] = nil
 end
 
--- ------- whose strip is it
+-- ------- ITEM parks the menu rather than replacing it
+--
+-- The bag's item list is the one list in the game that is not a screen of its
+-- own -- ListMenu's itemBox, isOpaque = false, sixteen tiles at (4,2) so it
+-- stops at y=103 -- and the strip underneath it stays on screen.  openItems
+-- sets phase to "messages" with nothing to say, so what the engine draws
+-- there is an empty box; the menu it was opened from should still be showing,
+-- with the hand hollow on the command whose screen is up.
 
-local function bottomVisible(battle)
-  return Runtime.call("battle.bottom_ui_visible",
-                      function() return true end, battle)
+local function bagOpen(index)
+  return fakeBattle({ phase = "messages", afterQueue = "menu",
+                      bag = true, menuIndex = index or 3 })
 end
+
+do
+  local drawn = record(bagOpen(3))
+  T.eq(#drawn.boxes, 4, "the four buttons are still drawn with the bag open")
+  for _, key in ipairs({ "FIGHT", "ITEM", "RUN" }) do
+    T.check(findText(drawn, key) ~= nil, key .. " is still on its button")
+  end
+
+  local hollow, filled = hollows(drawn), hands(drawn)
+  T.eq(#hollow, 1, "exactly one hollow marker")
+  T.eq(#filled, 0, "and no filled hand: the cursor is not in this grid")
+  T.eq(hollow[1].x, 1 * 8, "the marker is in ITEM's column")
+  T.eq(hollow[1].y, 16 * 8, "and on ITEM's row")
+end
+
+-- Whichever command opened the screen is the one marked.
+do
+  local expected = {
+    { x = 1 * 8, y = 13 * 8 }, { x = 11 * 8, y = 13 * 8 },
+    { x = 1 * 8, y = 16 * 8 }, { x = 11 * 8, y = 16 * 8 },
+  }
+  for i = 1, 4 do
+    local h = hollows(record(bagOpen(i)))
+    T.eq(#h, 1, "index " .. i .. " parks one marker")
+    T.eq(h[1].x, expected[i].x, "index " .. i .. " marks the right column")
+    T.eq(h[1].y, expected[i].y, "index " .. i .. " marks the right row")
+  end
+end
+
+-- The strip is NOT claimed while parked, and that is the point: the answer is
+-- inherited by every box above the battle, so a false here would take the
+-- bag's own "How many?" and YES/NO down with it.
+do
+  T.eq(bottomVisible(bagOpen(3)), true,
+       "parked does not claim the strip, so the bag keeps its own boxes")
+end
+
+-- An empty text box is one thing to draw over; a box with words in it is the
+-- box doing its own job.
+do
+  local talking = fakeBattle({ phase = "messages", afterQueue = "menu",
+                               bag = true, menuIndex = 3, current = "a line" })
+  T.eq(#record(talking).boxes, 0, "a message showing is left alone")
+
+  local elsewhere = fakeBattle({ phase = "messages", afterQueue = "end",
+                                 bag = true, menuIndex = 3 })
+  T.eq(#record(elsewhere).boxes, 0,
+       "and so is a screen that is not coming back to the menu")
+
+  local noCover = fakeBattle({ phase = "messages", afterQueue = "menu",
+                               menuIndex = 3 })
+  T.eq(#record(noCover).boxes, 0,
+       "with nothing above the battle there is nothing to park under")
+end
+
+-- Wide parks the same way, prompt and all.
+do
+  local drawn = record(fakeBattle({ phase = "messages", afterQueue = "menu",
+                                    bag = true, menuIndex = 3, wide = true }))
+  T.check(hasBox(drawn, 0, 13, 19, 5), "the wide prompt is still drawn")
+  T.check(hasBox(drawn, 19, 13, 19, 5), "and so are the wide buttons")
+  T.eq(#hollows(drawn), 1, "with one hollow marker")
+  T.eq(#hands(drawn), 0, "and no filled hand")
+end
+
+-- ------- whose strip is it
 
 do
   for _, phase in ipairs({ "menu", "moveSelect", "mimicSelect" }) do

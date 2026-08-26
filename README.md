@@ -65,11 +65,33 @@ text box, in the engine's own place, with the engine's own scroll and its own
 blinking arrow. The buttons are simply not drawn underneath it, and they are
 back on the frame the menu is.
 
-The same rule is what keeps `PKMN` and `ITEM` working. Opening the party or
-the bag leaves the battle on `menu` the whole time that screen is up — the
-engine pushes and returns, it does not change phase — so a mod claiming the
-strip on the phase alone would take those screens' prompts down with it. The
+The same rule is what keeps `PKMN` and `ITEM` working. A battle with a screen
+open above it is still a battle whose strip is being drawn, so a mod claiming
+it on the phase alone would take that screen's own prompts down with it. The
 strip is claimed only while the battle is the **top** of the state stack.
+
+### `ITEM` parks the menu rather than replacing it
+
+The bag does not leave the menu, it opens **on** it. Its item list is the one
+list in the game that is not a screen of its own — `ListMenu`'s `itemBox`,
+`isOpaque = false`, *"a partial box the map stays visible around"* — and it is
+sixteen tiles at (4,2), so it stops at y=103 and the strip underneath is still
+on screen.
+
+So the buttons stay up, and the hand on `ITEM` goes **hollow**: the same
+marker every list in this game leaves on the row it is acting on. No filled
+hand is drawn anywhere, because the cursor is not in the grid any more.
+
+That state is deliberately **not** claimed. Returning `false` for the battle
+would take the bag's own boxes with it — `How many?`, the `YES`/`NO`, the use
+message — because every box above a battle inherits the battle's answer. So
+the engine keeps drawing its empty box and the buttons go over the top of it,
+which lands in the same pixels: the four button boxes tile exactly the
+twenty-by-six that box occupies.
+
+`PKMN` reaches the same code and is never seen down it — `PartyMenu` is
+opaque, so the stack stops drawing at it and the battle underneath, this
+overlay included, never runs at all.
 
 ### What two columns inside 160 pixels costs
 

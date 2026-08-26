@@ -35,10 +35,15 @@ return function(mod)
 
   C.BLACK = { 0, 0, 0 }
 
-  -- The hand, and Mimic's hollow swap marker, by their glyph codes -- the
-  -- same two the engine writes (home/window.asm:184-185).
-  C.HAND = 0xED
-  C.SWAP = 0xEC
+  -- The filled hand and the hollow one, taken from the engine's own cursor
+  -- constants rather than written out here: Theme is where field.theme
+  -- restyles every menu's cursor at once, so a skin that redraws the arrow
+  -- redraws these with it.  The literals are the fallback for an engine with
+  -- no Theme to ask -- they are what Theme itself defaults to
+  -- (charmap.asm $ED and $EC).
+  local ok, Theme = pcall(require, "src.ui.Theme")
+  C.HAND = ok and Theme and Theme.cursor or 0xED
+  C.SWAP = ok and Theme and Theme.cursorHollow or 0xEC
 
   -- <PK> and <MN>: one word the font has no letters for, so PKMN is a pair
   -- of glyph codes everywhere the other three commands are a string.

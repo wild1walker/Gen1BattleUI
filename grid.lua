@@ -79,12 +79,10 @@ return function(mod, C)
 
   -- ------- whose strip is it
   --
-  -- A battle with a screen open above it (the party menu FIGHT's neighbour
-  -- opens, the bag ITEM opens) keeps phase == "menu" the whole time that
-  -- screen is up -- chooseMenu pushes and returns, it does not change phase.
-  -- So the phase alone does not mean the menu is on screen, and claiming the
-  -- strip on it would hide the prompts those screens put there: the
-  -- visibility hook is inherited by every text box above the battle
+  -- The phase alone does not mean the menu is on screen.  A battle with a
+  -- screen open above it is still a battle whose strip is being drawn, and
+  -- claiming it would hide the prompts that screen puts there: the visibility
+  -- hook is inherited by every text box above the battle
   -- (src/battle/UIVisibility.lua), so a false meant for our own menu would
   -- take the party menu's "Do what with X?" with it.
   --
@@ -101,6 +99,43 @@ return function(mod, C)
     if not OWNED[battle.phase] then return false end
     if not isTop(battle) then return false end
     return true
+  end
+
+  -- ------- and the third state: parked
+  --
+  -- ITEM does not leave the menu, it opens the bag ON it.  The bag's list is
+  -- the one list in the game that is not a screen of its own -- itemBox in
+  -- src/ui/ListMenu.lua, isOpaque = false, "a partial box the map stays
+  -- visible around" -- and it is sixteen tiles at (4,2), so it stops at y=103
+  -- and the strip underneath it is still on screen.  What the engine draws
+  -- there is an empty text box, because openItems sets phase to "messages"
+  -- with nothing to say; what should be there is the menu it was opened from,
+  -- still showing, with the hand left hollow on ITEM the way every list in
+  -- this game marks the row it is acting on.
+  --
+  -- This state is NOT claimed, and that is the whole design of it.  Returning
+  -- false for the battle would take the bag's own text boxes down with it --
+  -- "How many?", the YES/NO, the use message -- because every box above a
+  -- battle inherits the battle's answer (src/battle/UIVisibility.lua).  So
+  -- the engine keeps drawing its empty box and the buttons are drawn OVER it
+  -- in the overlay, which lands in the same pixels: the four button boxes
+  -- tile exactly the twenty-by-six that empty box occupies.
+  --
+  -- PKMN is the same code path and is never seen down it: PartyMenu is opaque
+  -- (src/ui/PartyMenu.lua), so the stack stops drawing at it and the battle
+  -- underneath -- this overlay included -- never runs at all.
+  function Grid.parked(battle)
+    if type(battle) ~= "table" or not battle.isBattle then return false end
+    if battle.phase ~= "messages" then return false end
+    -- the menu is what we come back to, which is what makes it still the menu
+    if battle.afterQueue ~= "menu" then return false end
+    if isTop(battle) then return false end
+    -- An empty text box is one thing to draw over; a box with words in it is
+    -- the box doing its own job, and buttons over the top of it would take
+    -- the words away.  Same three the engine tests before printing into it.
+    if battle.current or battle.animPlaying or battle.msgHold then return false end
+    local index = battle.menuIndex
+    return type(index) == "number" and index >= 1 and index <= 4
   end
 
   -- ------- the words
@@ -237,7 +272,10 @@ return function(mod, C)
     if swap and swap ~= selected and cells[swap] then
       C.drawHand(C.SWAP, cells[swap].handX, cells[swap].textY)
     end
-    if cells[selected] then
+    -- No selected cell is the parked case: the hollow marker is on the
+    -- command whose screen is open, and there is no filled hand anywhere
+    -- because the cursor is not in this grid any more.
+    if selected and cells[selected] then
       C.drawHand(C.HAND, cells[selected].handX, cells[selected].textY)
     end
   end
@@ -321,7 +359,12 @@ return function(mod, C)
 
   -- ------- the two layouts
 
-  local function drawClassic(battle)
+  local function drawClassic(battle, parked)
+    if parked then
+      fill(classicGrid(), commandLabels(battle, "battle"),
+           nil, battle.menuIndex)
+      return
+    end
     if battle.phase == "menu" then
       fill(classicGrid(), commandLabels(battle, "battle"),
            selectedCommand(battle))
@@ -337,13 +380,16 @@ return function(mod, C)
          not mimic and battle.moveSwapIndex or nil)
   end
 
-  local function drawWide(battle)
-    if battle.phase == "menu" then
+  local function drawWide(battle, parked)
+    if battle.phase == "menu" or parked then
+      -- parked puts the hollow marker on the command whose screen is open and
+      -- no filled hand anywhere; the live menu is the other way round.
+      local hand, mark
+      if parked then mark = battle.menuIndex else hand = selectedCommand(battle) end
       if battle.safari then
         -- The safari menu has no prompt to make room for -- the ball count
         -- rides in the menu itself -- so it takes the whole strip.
-        fill(wideGrid(0, 13, 38, 18), commandLabels(battle),
-             selectedCommand(battle))
+        fill(wideGrid(0, 13, 38, 18), commandLabels(battle), hand, mark)
         return
       end
       -- The prompt on the left, the buttons on the right, splitting the
@@ -363,7 +409,7 @@ return function(mod, C)
         Font.draw(Strings("What will"), 8, 112)
         Font.draw(who .. tail, 8, 128)
       end
-      fill(wideGrid(19, 13, 19, 28), commandLabels(battle), selectedCommand(battle))
+      fill(wideGrid(19, 13, 19, 28), commandLabels(battle), hand, mark)
       return
     end
     local mimic = battle.phase == "mimicSelect"
@@ -382,16 +428,23 @@ return function(mod, C)
   end
 
   function Grid.draw(battle)
-    if not Grid.owns(battle) then return end
+    local parked = Grid.parked(battle)
+    if not (Grid.owns(battle) or parked) then return end
     -- Another mod that has hidden the battle's bottom layer -- a cutscene, a
     -- screenshot mode -- meant it, and a menu drawn over the top of that is
     -- this mod losing an argument it should not have been in.
     if upstream[battle] == false then return end
-    if battle.phase ~= "menu"
+    -- Only the move grids read curMoves; the command grid and the parked one
+    -- are four fixed words and do not care whether there is a party at all.
+    if not parked and battle.phase ~= "menu"
        and not (battle.player and battle.player.curMoves) then
       return
     end
-    if battle:wideLayout() then drawWide(battle) else drawClassic(battle) end
+    if battle:wideLayout() then
+      drawWide(battle, parked)
+    else
+      drawClassic(battle, parked)
+    end
     C.white()
   end
 

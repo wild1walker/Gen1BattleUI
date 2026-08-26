@@ -12,7 +12,11 @@
 --                              of how dialogue takes the strip back: it is
 --                              still the engine's own text box in the
 --                              engine's own place, and the buttons are simply
---                              not drawn underneath it.
+--                              not drawn underneath it.  It is also never
+--                              claimed while the bag is open on top of the
+--                              menu -- that answer is inherited by every box
+--                              the bag puts up, so the buttons are drawn over
+--                              the engine's empty one instead.
 --
 --   battle.overlay             draws the buttons.  It runs last in the frame,
 --                              after the palette pass and the pictures, in
@@ -114,8 +118,16 @@ return function(mod)
   -- or bag prompt opened FROM the menu keeps its box.
   mod.hooks:wrap("battle.bottom_ui_visible", function(next, state)
     local visible = next(state)
+    -- Recorded for the battle whether or not the strip is claimed, because
+    -- the parked state below draws without claiming and still has to know.
+    if type(state) == "table" and state.isBattle then
+      Grid.rememberUpstream(state, visible)
+    end
+    -- Parked -- the bag open on top of the menu -- is deliberately NOT
+    -- claimed.  A false here would take the bag's own boxes with it, so the
+    -- engine keeps drawing its empty one and the buttons go over the top of
+    -- it instead.  See Grid.parked.
     if not Grid.owns(state) then return visible end
-    Grid.rememberUpstream(state, visible)
     return false
   end)
 
@@ -146,4 +158,5 @@ return function(mod)
   mod.exports = mod.exports or {}
   mod.exports.geometry = Grid.geometry
   mod.exports.owns = Grid.owns
+  mod.exports.parked = Grid.parked
 end
