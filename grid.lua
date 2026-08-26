@@ -342,7 +342,8 @@ return function(mod, C)
       if battle.safari then
         -- The safari menu has no prompt to make room for -- the ball count
         -- rides in the menu itself -- so it takes the whole strip.
-        fill(wideGrid(0, 13, 38, 18), commandLabels(battle), battle.menuIndex or 1)
+        fill(wideGrid(0, 13, 38, 18), commandLabels(battle),
+             selectedCommand(battle))
         return
       end
       -- The prompt on the left, the buttons on the right, splitting the
