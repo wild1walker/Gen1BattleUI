@@ -105,7 +105,11 @@ local function fakeBattle(o)
     current = o.current,
     mimicMoves = o.mimicMoves or MOVES,
     player = { name = "PIDGEOTTO", curMoves = o.moves or MOVES,
-               disabledSlot = o.disabled },
+               disabledSlot = o.disabled,
+               fainted = o.fainted,
+               -- the XP bar reads the growth curve, so a battle that wants
+               -- one needs a real species and a real exp between two levels
+               mon = o.mon },
     wide = o.wide or false,
   }
   battle.game = { stack = stack, data = Data }
@@ -123,6 +127,12 @@ end
 
 local function record(battle)
   local out = { boxes = {}, text = {}, codes = {}, rects = {} }
+  -- Every recorded draw carries the order it went down in.  That is not
+  -- decoration: the XP bar is kept off the move panel by being drawn BEFORE
+  -- it and nothing else, so "before" is the claim, and a claim about order
+  -- cannot be checked against four separate lists without one.
+  local seq = 0
+  local function step() seq = seq + 1; return seq end
   local realDraw, realBox, realCode = Font.draw, Font.drawBox, Font.drawCode
   -- Which shader is live when a glyph goes down, and what colour it was told
   -- to stencil with: that pair IS the tint, so it is recorded onto the label
@@ -141,10 +151,11 @@ local function record(battle)
   Font.draw = function(text, x, y)
     local ok, w = pcall(Font.width, text)
     out.text[#out.text + 1] = { text = tostring(text), x = x, y = y,
-                                w = ok and w or 0, ink = tint() }
+                                w = ok and w or 0, ink = tint(), seq = step() }
   end
   Font.drawBox = function(tx, ty, tw, th)
-    out.boxes[#out.boxes + 1] = { tx = tx, ty = ty, tw = tw, th = th }
+    out.boxes[#out.boxes + 1] = { tx = tx, ty = ty, tw = tw, th = th,
+                                  seq = step() }
   end
   local realRect, realSetColor = love.graphics.rectangle, love.graphics.setColor
   local colour
@@ -153,11 +164,12 @@ local function record(battle)
     return realSetColor(r, g, b, a)
   end
   love.graphics.rectangle = function(mode, x, y, w, h, ...)
-    out.rects[#out.rects + 1] = { x = x, y = y, w = w, h = h, colour = colour }
+    out.rects[#out.rects + 1] = { x = x, y = y, w = w, h = h, colour = colour,
+                                  seq = step() }
     return realRect(mode, x, y, w, h, ...)
   end
   Font.drawCode = function(code, x, y)
-    out.codes[#out.codes + 1] = { code = code, x = x, y = y }
+    out.codes[#out.codes + 1] = { code = code, x = x, y = y, seq = step() }
   end
   -- The small face does not go through Font at all -- it is a LOVE font
   -- printed directly -- so recording only Font.draw would see a move menu
@@ -178,7 +190,7 @@ local function record(battle)
     local c = colour and { colour[1] * 255, colour[2] * 255, colour[3] * 255 }
     if c and c[1] == 0 and c[2] == 0 and c[3] == 0 then c = nil end
     out.text[#out.text + 1] = { text = tostring(text), x = x, y = y,
-                                w = w, small = true, ink = c }
+                                w = w, small = true, ink = c, seq = step() }
   end
   local ok, err = pcall(Runtime.call, "battle.overlay", function() end, battle)
   love.graphics.print, love.graphics.setFont = realPrint, realSetFont
@@ -853,6 +865,145 @@ do
   T.check(ink ~= nil, "and colours it the same way")
   T.check(ink and ink[1] > ink[3], "in FIRE's own ink")
   run.loader.modOptions["Gen1BattleUI"] = nil
+end
+
+-- ------- where the panel is, told to whoever draws after this mod
+--
+-- The one export that exists for another mod.  battle.overlay is the last
+-- hook INSIDE BattleState:draw, and Gen1WildQOL's XP bar wraps battle.draw
+-- itself, so it draws after every link on that hook whatever priority they
+-- carry -- which is how a blue line kept lying across this panel through a
+-- release that thought a priority had settled it.  A neighbour like that
+-- cannot be out-drawn, only told.
+--
+-- So the numbers here are a contract, and the assertion that matters is that
+-- they are the numbers actually DRAWN: the published geometry said eleven
+-- tiles for four months after the box became fourteen, which is precisely
+-- the sort of stale copy that makes a neighbour clip to the wrong place.
+
+do
+  local panelRect = exports and exports.panelRect
+  T.check(type(panelRect) == "function", "the panel's rect is published")
+
+  local battle = fakeBattle({ phase = "moveSelect" })
+  local rect = panelRect and panelRect(battle)
+  T.check(type(rect) == "table", "and answers for a move menu")
+
+  -- the rect IS the box: recorded, not restated
+  local drawn = record(fakeBattle({ phase = "moveSelect" }))
+  local panelBox
+  for _, b in ipairs(drawn.boxes) do
+    if b.ty < 12 then panelBox = b end
+  end
+  T.check(panelBox ~= nil, "a panel box is drawn above the buttons")
+  if rect and panelBox then
+    T.eq(rect.x, panelBox.tx * 8, "the rect starts where the box does")
+    T.eq(rect.y, panelBox.ty * 8, "on the same row")
+    T.eq(rect.w, panelBox.tw * 8, "and is exactly as wide as the box")
+    T.eq(rect.h, panelBox.th * 8, "and as tall")
+  end
+
+  -- the published tile geometry is the same table the drawing reads, so it
+  -- cannot drift from it again
+  local published = exports.geometry.classic.panel
+  T.eq(published and published.moveSelect and published.moveSelect.tw,
+       panelBox and panelBox.tw, "the published tile width is the drawn one")
+
+  -- nothing up there, nothing to clip around: a caller told nil must not
+  -- fall back to the vanilla box, because this mod is not drawing that either
+  T.eq(panelRect(fakeBattle({ phase = "menu" })), nil,
+       "the command menu has no panel")
+  run.loader.modOptions["Gen1BattleUI"] = { move_panel = false }
+  T.eq(panelRect(fakeBattle({ phase = "moveSelect" })), nil,
+       "and MOVE PANEL off is no panel at all")
+  run.loader.modOptions["Gen1BattleUI"] = nil
+  T.eq(panelRect(fakeBattle({ phase = "moveSelect", covered = true })), nil,
+       "nor is a battle with a screen open over it")
+  T.eq(panelRect({}), nil, "and a state that is not a battle is not one")
+
+  -- wide answers for its own panel, which is the ten tiles on the right
+  local wide = panelRect(fakeBattle({ phase = "moveSelect", wide = true }))
+  T.check(type(wide) == "table" and wide.x == 28 * 8,
+          "the wide layout answers with its own ten tiles")
+end
+
+-- ------- the XP bar goes UNDER the panel
+--
+-- This is the bug the move here was for.  The bar used to live in
+-- Gen1WildQOL, drawn by a wrapper around battle.draw -- which runs after
+-- every link on battle.overlay however high a priority they carry, so it
+-- could not be drawn over and clipped itself instead, to x=88.  88 is where
+-- the VANILLA move panel ends; this mod's ends at 112, and the twenty-four
+-- pixels between were a blue line across the PP row.
+--
+-- In one file there is nothing to clip.  The bar is drawn first and the panel
+-- second, so the panel covers it -- and a panel that changes width takes the
+-- covering with it, which is the property no clip could have had.  So the
+-- assertion is about ORDER, not about pixels.
+
+-- 40 of the 44 exp between L5 and L6, which puts the bar 60 pixels long and
+-- its left end at x=87.  That is not an arbitrary fixture: 87 is where the
+-- bar started in the screenshot this was reported from, and everything from
+-- there to 112 is what was lying across the panel.
+local MON = { species = "FIXMON_A", level = 5, exp = 175, hp = 20 }
+
+local function barRect(drawn)
+  for _, r in ipairs(drawn.rects) do
+    if r.h == 2 then return r end
+  end
+  return nil
+end
+
+do
+  local drawn = record(fakeBattle({ phase = "moveSelect", mon = MON }))
+  local bar = barRect(drawn)
+  T.check(bar ~= nil, "the XP bar is drawn")
+  T.eq(bar and bar.y, 89, "on the row under the player's HP numbers")
+  T.check(bar and bar.x + bar.w == 80 + 67,
+          "and is anchored on its right end, growing leftwards")
+
+  local panelBox
+  for _, b in ipairs(drawn.boxes) do
+    if b.ty < 12 then panelBox = b end
+  end
+  T.check(panelBox ~= nil, "the move panel is drawn in the same frame")
+  T.check(bar and panelBox and bar.seq < panelBox.seq,
+          "and the bar goes down BEFORE it, so the panel covers it")
+
+  -- the part that used to show: the bar starts left of where the panel ends,
+  -- which is exactly why drawing it first is what fixes this and clipping to
+  -- the vanilla 88 did not
+  T.eq(bar and bar.x, 87, "the bar starts at 87, as reported")
+  T.check(bar and panelBox and bar.x < (panelBox.tx + panelBox.tw) * 8,
+          "the bar really does run under the panel rather than beside it")
+  -- the old clip was to 88, the vanilla panel's edge, and this panel's edge
+  -- is 112: those 24 pixels were the report
+  T.check(panelBox and (panelBox.tx + panelBox.tw) * 8 == 112,
+          "and the panel it runs under ends at 112, not at the vanilla 88")
+
+  -- ...and no part of this mod clips it, because the covering is the clip
+  T.check(bar and bar.w > 0, "the bar keeps its full width and is covered, not cut")
+end
+
+-- Off is off, and a fainted Pokemon has no HUD for a bar to sit under: the
+-- engine clears that HUD the moment the mon goes down, and a bar drawn into
+-- the space it left is a blue stripe over nothing.
+do
+  run.loader.modOptions["Gen1BattleUI"] = { xp_bar = false }
+  T.check(barRect(record(fakeBattle({ phase = "moveSelect", mon = MON }))) == nil,
+          "XP BAR off draws no bar")
+  run.loader.modOptions["Gen1BattleUI"] = nil
+
+  T.check(barRect(record(fakeBattle({ phase = "menu", mon = MON,
+                                      fainted = true }))) == nil,
+          "and a fainted Pokemon has no bar under its cleared HUD")
+  T.check(barRect(record(fakeBattle({ phase = "menu", mon = MON, safari = true })))
+          == nil, "nor does a Safari battle, which has no mon of yours in it")
+
+  -- the command menu is not a menu the bar hides from: it is the HUD's own
+  -- decoration and shows whenever the HUD does
+  T.check(barRect(record(fakeBattle({ phase = "menu", mon = MON }))) ~= nil,
+          "the bar shows on the command menu too")
 end
 
 -- ------- the bag's own scrolling is not this mod's

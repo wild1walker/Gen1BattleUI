@@ -172,6 +172,30 @@ already gave, so names arrive whole there and nothing is cut. Its
 `What will X do?` prompt keeps the left half of the strip, and the move
 panel keeps its ten tiles on the right.
 
+### The XP bar
+
+Gen 2 draws an experience bar in its own player HUD; Gen 1 has none, and this
+is the Gen 1 substitute. It fills as the highlighted Pokémon earns experience,
+runs the Gen 2 fill-hold-burst-refill on a level up, and takes the palette's
+own shade unless a colourised mode wants Gen 2's blue.
+
+It was **Gen1WildQOL**'s until 1.3.0, and it is here because of what being
+here fixes.
+
+Over there it was drawn by a wrapper around `battle.draw` — and `battle.overlay`,
+this mod's only way onto the screen, is the *last hook inside* that function.
+So the bar drew after every link on that hook, at any priority. It could not
+be drawn over. What it did instead was clip itself to `x=88`, which is where
+the **vanilla** move panel ends; this mod's panel ends at 112, and those
+twenty-four pixels were a blue line lying across the `PP` row every time a
+move menu was up. Raising this mod's hook priority — which 1.2.1 did — changed
+nothing, because priority was never what decided the order.
+
+In one file there is nothing to decide. The bar goes down first and the grid
+second, so the panel covers it the way it covers anything else beneath it, and
+a panel that changes width takes the covering with it. **`XP BAR`** turns it
+off.
+
 ---
 
 ## Options
@@ -179,6 +203,7 @@ panel keeps its ten tiles on the right.
 | Row | Default | What it does |
 | --- | --- | --- |
 | `MOVE PANEL` | on | The name, type and PP of the highlighted move, above the grid, where the vanilla `TYPE/PP` box stood. Off gives the picture behind it back — and, on the wide layout, gives its tiles to the grid, because a strip that stops short of the screen edge is a hole in the frame rather than a saving. |
+| `XP BAR` | on | A Gen 2 style experience bar under your Pokémon, filling towards the next level, with Gen 2's fill-hold-burst-refill on a level up. Drawn before the move panel, so the panel covers it rather than the other way round. |
 | `TYPE COLOUR` | on | The type in the panel and each move name on its button, in that type's own colour, drawn through a shader that inks the game's own glyphs. Off is plain black text. |
 | `FULL NAMES` | off | Move names in the engine's Plain Pixel when they will not fit the tile font, so they print whole in the buttons too. Off — the default — is the game's own font always, cut to the cell, and the panel above is what reads the whole name. |
 
@@ -186,6 +211,9 @@ panel keeps its ten tiles on the right.
 
 ## What it does not touch
 
+- **The HP panels, the pictures, the animations** — with the one deliberate
+  exception of the XP bar, which is drawn under the player's HP numbers
+  because that is where Gen 2 puts its own.
 - **What the menus do.** Only where they are drawn. Every index, every key,
   every callback is still the engine's, so anything wrong with what the battle
   menu *does* is not this mod.
@@ -239,6 +267,9 @@ wild1walker/Gen1Wild
   reading of `menuIndex` is why the command menu needed no new input handling.
 - **Plain Pixel** by Douglas Vautour (CC-BY 4.0), which Gen1Recomp bundles for
   its translation mode and which this mod borrows for move names.
+- **[unxpected-uxp](https://github.com/unxpected-uxp/pokemon-gen1-recomp-mod-qol)**
+  — the XP bar, from their Quality of Life mod by way of Gen1WildQOL, which
+  maintained it and wrote the faint guard it still carries.
 - **Nintendo / Creatures / GAME FREAK** — Pokémon Red, Blue and Yellow.
   Unofficial fan mod, no affiliation, no endorsement.
 

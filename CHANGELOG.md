@@ -1,5 +1,41 @@
 # Changelog
 
+## 1.3.0
+
+- **The XP bar lives here now.** It was Gen1WildQOL's — one of the four
+  features that mod carries from unxpected-uxp's Quality of Life. It is a
+  battle UI feature and this is the battle UI mod, and moving it is what
+  actually fixed the bug 1.2.1 and 1.2.2 both failed to.
+- **Which was that the bar lay across the move panel.** From over there it was
+  drawn by a wrapper around `battle.draw`, and `battle.overlay` — this mod's
+  only way onto the screen — is the *last hook inside* that function. So the
+  bar drew after every link on it, at any priority. It could not be drawn
+  over. 1.2.1 raised this mod's hook priority to fix it and that did nothing,
+  because priority was never what decided the order.
+- Unable to be drawn over, the bar clipped itself instead: to `x=88`, which is
+  where the **vanilla** move panel ends. This mod's panel ends at 112. Those
+  twenty-four pixels were the blue line on the `PP 27/35` row.
+- **Here there is no clip.** The bar and the grid go down in one function, bar
+  first, so the panel covers it exactly as far as the panel reaches — and a
+  panel that changes width takes the covering with it, which is the property
+  no clip could have had.
+- The numbers, the level-up fill-hold-burst-refill and the wide layout's
+  boxed-and-labelled version are ported as they were, as is the guard that
+  stops the bar once your Pokémon faints and the engine clears the HUD out
+  from under it. **`XP BAR`** turns it off; on is what it was over there.
+- **The 3D-battle path is not carried over.** It drew into another mod's
+  canvas through a handshake with that mod's `snapHUDs`, and the handshake was
+  what decided whether the path was taken. Ported without it, it would be
+  taken whenever that mod was loaded — worse than not having it at all.
+- **`mod.exports.panelRect(battle)`** publishes the panel's rectangle in game
+  pixels, for anything else that draws after this mod and must not be drawn
+  over. `nil` means nothing of this mod's is up there.
+- **The published tile geometry is no longer a second copy.**
+  `geometry.classic.panel` is the table the drawing reads. It had said eleven
+  tiles ever since 1.2.1 made the box fourteen — a stale number is exactly
+  what makes a neighbour clip to the wrong place, which is the shape of this
+  whole release.
+
 ## 1.2.2
 
 - **The colour is in the letters now, not behind them.** 1.2.1 put the type on
