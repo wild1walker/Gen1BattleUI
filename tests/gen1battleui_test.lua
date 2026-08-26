@@ -552,5 +552,62 @@ do
        "and a direction pointing at an empty slot holds")
 end
 
-run.release()
+-- ------- the bag's own scrolling is not this mod's
+--
+-- Reported as "the item screen sometimes scrolls a bunch".  It is the
+-- engine's hold-to-scroll (src/ui/ListMenu.lua), which is opt-in through the
+-- ui.list_menu hook and which another mod turns on -- Gen1ModernBag ships
+-- Hold Scroll Speed = Fast, repeating every 2 frames after 10.  This mod
+-- subscribes to three battle hooks and none of them is ui.list_menu, so the
+-- claim is that a bag list behaves identically whether or not it is loaded.
+-- Asserted by driving one and comparing the trace, because "we do not touch
+-- it" is exactly the kind of claim that rots when someone adds a fourth hook.
+
+do
+  T.check((Runtime.hooks.chains or {})["ui.list_menu"] == nil,
+          "this mod does not subscribe to ui.list_menu")
+  T.check((Runtime.hooks.chains or {})["input.step"] == nil,
+          "nor to input.step: no input path is touched at all")
+
+  local ListMenu = require("src.ui.ListMenu")
+  local function listGame()
+    local down, pressed = {}, {}
+    local g = { stack = { pop = function() end } }
+    g.input = { wasPressed = function(_, k) return pressed[k] end,
+                isDown = function(_, k) return down[k] end }
+    g.hold = function(k) down, pressed = { [k] = true }, {} end
+    g.tap = function(k) down, pressed = { [k] = true }, { [k] = true } end
+    return g
+  end
+  local items = {}
+  for i = 1, 30 do items[i] = { label = "ITEM" .. i, right = "x1" } end
+
+  -- itemBox is the shape BagMenu builds in battle; both repeat settings, so
+  -- the guard holds whether or not the other mod has turned it on.
+  local function trace(keyRepeat)
+    local g = listGame()
+    local list = ListMenu.new(g, "ITEM", items,
+      { itemBox = true, keyRepeat = keyRepeat })
+    local out = {}
+    g.tap("down"); list:update(1 / 60)
+    out[#out + 1] = list.index .. "/" .. list.scroll
+    for _ = 1, 40 do
+      g.hold("down"); list:update(1 / 60)
+      out[#out + 1] = list.index .. "/" .. list.scroll
+    end
+    return table.concat(out, " ")
+  end
+
+  -- The mod is already loaded, so the comparison is against the same code
+  -- with its hook chains released -- which is what a mod-free boot is.
+  local loaded = { trace(false), trace(true) }
+  run.release()
+  local bare = { trace(false), trace(true) }
+
+  T.eq(loaded[1], bare[1], "a tapped bag list scrolls the same either way")
+  T.eq(loaded[2], bare[2], "and so does a held one")
+  -- and the held trace really does move, or the two would match trivially
+  T.neq(bare[1], bare[2], "the hold-to-scroll case is actually different")
+end
+
 T.finish("Gen1BattleUI")
