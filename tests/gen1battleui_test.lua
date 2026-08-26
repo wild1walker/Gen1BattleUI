@@ -33,6 +33,22 @@ for _, name in ipairs({ "battle.bottom_ui_visible", "battle.overlay",
   T.check((Runtime.hooks.chains or {})[name] ~= nil, name .. " is attached")
 end
 
+-- battle.overlay's priority is draw order: Hooks runs the highest-priority
+-- link outermost, and this one calls next() before it draws, so highest is
+-- drawn LAST.  That is what puts the panel over another mod's EXP bar rather
+-- than under it, and it is the one hook here that insists on an order.
+do
+  local chain = Runtime.hooks.chains["battle.overlay"]
+  local ours
+  for _, entry in ipairs(chain) do
+    if entry.owner == "Gen1BattleUI" then ours = entry end
+  end
+  T.check(ours ~= nil, "the overlay link is ours to find")
+  T.check(ours and ours.priority >= 1000,
+          "and carries a priority high enough to be drawn last")
+  T.eq(chain[1], ours, "so it sorts outermost in the chain")
+end
+
 -- Exports are published by the loader under the mod's id once its entry
 -- chunk returns; the mod RECORD is a different object and never carries them.
 local exports = run.loader.exports["Gen1BattleUI"]
@@ -92,7 +108,7 @@ end
 -- ------- recording a frame
 
 local function record(battle)
-  local out = { boxes = {}, text = {}, codes = {} }
+  local out = { boxes = {}, text = {}, codes = {}, rects = {} }
   local realDraw, realBox, realCode = Font.draw, Font.drawBox, Font.drawCode
   Font.draw = function(text, x, y)
     local ok, w = pcall(Font.width, text)
@@ -101,6 +117,16 @@ local function record(battle)
   end
   Font.drawBox = function(tx, ty, tw, th)
     out.boxes[#out.boxes + 1] = { tx = tx, ty = ty, tw = tw, th = th }
+  end
+  local realRect, realSetColor = love.graphics.rectangle, love.graphics.setColor
+  local colour
+  love.graphics.setColor = function(r, g, b, a)
+    colour = { r, g, b }
+    return realSetColor(r, g, b, a)
+  end
+  love.graphics.rectangle = function(mode, x, y, w, h, ...)
+    out.rects[#out.rects + 1] = { x = x, y = y, w = w, h = h, colour = colour }
+    return realRect(mode, x, y, w, h, ...)
   end
   Font.drawCode = function(code, x, y)
     out.codes[#out.codes + 1] = { code = code, x = x, y = y }
@@ -124,6 +150,7 @@ local function record(battle)
   end
   local ok, err = pcall(Runtime.call, "battle.overlay", function() end, battle)
   love.graphics.print, love.graphics.setFont = realPrint, realSetFont
+  love.graphics.rectangle, love.graphics.setColor = realRect, realSetColor
   Font.draw, Font.drawBox, Font.drawCode = realDraw, realBox, realCode
   T.check(ok, "the overlay draws (" .. tostring(err) .. ")")
   return out
@@ -241,17 +268,15 @@ do
 
   -- the four buttons plus the panel above them
   T.eq(#drawn.boxes, 5, "the move menu is four buttons and a panel")
-  T.check(hasBox(drawn, 0, 8, 11, 5),
-          "the panel keeps the vanilla TYPE/PP box's footprint")
+  T.check(hasBox(drawn, 0, 8, 14, 5), "the panel is fourteen tiles, three rows")
 
-  -- ------- and stays off the player's own HUD
+  -- ------- and stops short of the EXP bar
   --
-  -- DrawPlayerHUDAndHPBar puts the name, level, HP bar, HP numbers and the
-  -- underline across rows 7-11 from x=72 rightwards.  1.1.0's panel was
-  -- twenty tiles wide across rows 8-11 and wiped every one of them, which is
-  -- the bug this asserts against: above the button strip, nothing this mod
-  -- draws may reach the column the HP numbers start in.
-  local HUD_X, STRIP_Y = 88, 96
+  -- Fourteen tiles is the smallest width that prints a move name whole, and
+  -- the panel is not allowed to creep back out to the full width it used to
+  -- run to -- which is what put it under the EXP bar another mod draws from
+  -- about x=98.  112 is where fourteen tiles end.
+  local HUD_X, STRIP_Y = 112, 96
   for _, b in ipairs(drawn.boxes) do
     if b.ty * 8 < STRIP_Y then
       T.check((b.tx + b.tw) * 8 <= HUD_X,
@@ -266,21 +291,22 @@ do
     end
   end
 
-  -- With FULL NAMES on the panel prints the name whole, in the small face,
-  -- and still inside its own box.
+  -- The panel prints the name whole, in the game's own font, whatever the
+  -- buttons below do.  Twelve interior tiles is what that takes.
   local panelName
   for _, t in ipairs(drawn.text) do
     if t.y < STRIP_Y and t.text:match("^THUNDER") then panelName = t end
   end
   T.check(panelName ~= nil, "the panel names the highlighted move")
   T.eq(panelName and panelName.text, "THUNDERSHOCK", "whole, not cut")
-  T.check(panelName and panelName.w <= 72, "inside the box it has")
+  T.check(panelName and not panelName.small,
+          "in the game's own font, not the small face")
+  T.check(panelName and panelName.w <= 96, "inside the twelve glyphs it has")
 
-  local cellLabels, whole = 0, 0
+  local cellLabels = 0
   for _, t in ipairs(drawn.text) do
     if t.y >= 96 then
       cellLabels = cellLabels + 1
-      if not t.text:match("%.$") then whole = whole + 1 end
       T.check(t.w <= 56,
               ("%q is %d px, inside the 56 a cell has"):format(t.text, t.w))
       -- and it must not reach the border of the box it is in: the left
@@ -292,7 +318,6 @@ do
     end
   end
   T.eq(cellLabels, 4, "one label per button")
-  T.eq(whole, 4, "and every name printed whole, none of them cut")
 
   for _, t in ipairs(drawn.text) do
     T.check(t.x >= 0 and t.x + t.w <= 160,
@@ -626,6 +651,20 @@ local function faces(drawn, minY)
 end
 
 do
+  -- the buttons are the game's own font by default, cut to the cell
+  local byDefault = record(fakeBattle({ phase = "moveSelect", moves = {
+    { id = "LONG_A", pp = 10, ppUps = 0 }, { id = "LONG_B", pp = 10, ppUps = 0 },
+    { id = "LONG_C", pp = 10, ppUps = 0 }, { id = "LONG_D", pp = 10, ppUps = 0 },
+  } }))
+  local dtiles, dsmall = 0, 0
+  for _, t in ipairs(byDefault.text) do
+    if t.y >= 96 then
+      if t.small then dsmall = dsmall + 1 else dtiles = dtiles + 1 end
+    end
+  end
+  T.eq(dsmall, 0, "the buttons are the game's own font by default")
+  T.eq(dtiles, 4, "all four of them")
+
   local SHORT = {
     { id = "S_A", pp = 10, ppUps = 0 }, { id = "S_B", pp = 10, ppUps = 0 },
     { id = "S_C", pp = 10, ppUps = 0 }, { id = "S_D", pp = 10, ppUps = 0 },
@@ -646,10 +685,12 @@ do
     { id = "S_A", pp = 10, ppUps = 0 }, { id = "LONG_A", pp = 10, ppUps = 0 },
     { id = "S_C", pp = 10, ppUps = 0 }, { id = "S_D", pp = 10, ppUps = 0 },
   }
+  run.loader.modOptions["Gen1BattleUI"] = { full_names = true }
   local mixed = record(fakeBattle({ phase = "moveSelect", moves = MIXED }))
   local mtiles, msmall = faces(mixed)
   T.eq(msmall, 4, "one name too wide moves all four to the small face")
   T.eq(mtiles, 0, "and none is left behind on the tile font")
+  run.loader.modOptions["Gen1BattleUI"] = nil
 
   -- the command menu is four fixed words and never moves
   local cmd = record(fakeBattle({ phase = "menu" }))
@@ -660,7 +701,6 @@ end
 
 -- FULL NAMES off is the game's font always, and the cut comes back.
 do
-  run.loader.modOptions["Gen1BattleUI"] = { full_names = false }
   local drawn = record(fakeBattle({ phase = "moveSelect", moves = {
     { id = "LONG_A", pp = 10, ppUps = 0 }, { id = "LONG_B", pp = 10, ppUps = 0 },
     { id = "LONG_C", pp = 10, ppUps = 0 }, { id = "LONG_D", pp = 10, ppUps = 0 },
@@ -673,18 +713,62 @@ do
     if t.y >= 96 and t.text:match("%.$") then cut = cut + 1 end
   end
   T.check(cut > 0, "and a name too long for its cell is cut again")
-  run.loader.modOptions["Gen1BattleUI"] = nil
 end
 
 -- The wide layout's cells are twelve glyphs, which is what Gen 1's longest
 -- name needs, so it never reaches for the small face either.
 do
+  run.loader.modOptions["Gen1BattleUI"] = { full_names = true }
   local drawn = record(fakeBattle({ phase = "moveSelect", wide = true, moves = {
     { id = "LONG_A", pp = 10, ppUps = 0 }, { id = "LONG_B", pp = 10, ppUps = 0 },
     { id = "LONG_C", pp = 10, ppUps = 0 }, { id = "LONG_D", pp = 10, ppUps = 0 },
   } }))
   local _, small = faces(drawn, 104)
   T.eq(small, 0, "wide keeps the game's own font: its cells already fit")
+  run.loader.modOptions["Gen1BattleUI"] = nil
+end
+
+-- ------- the type sits on a chip in its own colour
+--
+-- Behind the word, never in it: a tile glyph is black on transparent and
+-- comes out black whatever colour is set, so tinting the letters would mean
+-- giving up the game's own font for them.  The chip is exactly the glyph row
+-- tall, so it cannot bleed into the line above or below.
+
+local function chipUnder(drawn, text)
+  local label
+  for _, t in ipairs(drawn.text) do if t.text == text then label = t end end
+  if not label then return nil end
+  for _, r in ipairs(drawn.rects) do
+    if r.y == label.y and r.h == 8 and r.x == label.x then return r, label end
+  end
+  return nil, label
+end
+
+do
+  local drawn = record(fakeBattle({ phase = "moveSelect", moveIndex = 1 }))
+  local chip, label = chipUnder(drawn, "FIRE")
+  T.check(label ~= nil, "the panel names the type")
+  T.check(chip ~= nil, "and puts a chip under it")
+  T.check(chip and chip.w >= label.w, "at least as wide as the word")
+  T.check(chip and chip.colour and chip.colour[1] > chip.colour[3],
+          "FIRE's chip is warmer than it is blue")
+
+  -- a type the table does not know gets no chip, and the word is unchanged
+  Data.moves.ODD = { name = "ODD", type = "MOD_MADE_UP", pp = 5 }
+  local odd = record(fakeBattle({ phase = "moveSelect", moveIndex = 1,
+    moves = { { id = "ODD", pp = 5, ppUps = 0 } } }))
+  local oddChip, oddLabel = chipUnder(odd, "MOD_MADE_UP")
+  T.check(oddLabel ~= nil or true, "an unknown type still prints")
+  T.check(oddChip == nil, "and gets no chip")
+
+  -- TYPE COLOUR off leaves the type as plain black text
+  run.loader.modOptions["Gen1BattleUI"] = { type_colour = false }
+  local plain = record(fakeBattle({ phase = "moveSelect", moveIndex = 1 }))
+  T.check(select(1, chipUnder(plain, "FIRE")) == nil,
+          "TYPE COLOUR off draws no chip")
+  T.check(findText(plain, "FIRE") ~= nil, "and the type still reads")
+  run.loader.modOptions["Gen1BattleUI"] = nil
 end
 
 -- ------- the bag's own scrolling is not this mod's

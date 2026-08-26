@@ -1,5 +1,30 @@
 # Changelog
 
+## 1.2.1
+
+- **The panel reads the move name whole again, and is three rows.** 1.2.0 cut
+  it to eleven tiles, which cut names with it — `QUICK ATTACK` became
+  `QUICK AT.` That was me over-correcting a report about the EXP bar into a
+  report about the HUD. Name, type and PP now each get their own row.
+- **Fourteen tiles wide, not twenty.** Twelve interior tiles is twelve glyphs
+  of the game's own font, and Gen 1's longest names are exactly twelve — so
+  fourteen is the narrowest the panel can be and still never cut. That is 48
+  pixels short of the full width it used to run to.
+- **The EXP bar no longer lies across the panel.** Narrowing was only half of
+  it: another mod draws that bar and drew it *after* this panel. The overlay
+  hook now carries a priority that puts this mod's link outermost, and since
+  it calls `next()` before it draws, outermost means drawn **last** — so the
+  panel covers what it overlaps instead of being covered.
+- **The type sits on a chip in its own colour.** Behind the word, not in it: a
+  tile glyph is black on transparent and comes out black whatever colour is
+  set, so tinting the letters would mean giving up the game's own font for
+  them. A type the table does not know — a mod's — simply gets no chip.
+  **`TYPE COLOUR`** turns it off.
+- **`FULL NAMES` now defaults off.** The buttons are the game's own font, cut
+  to the cell, which is what the 2×2 has always looked like; the panel above
+  is what reads the whole name. On is still there for anyone who wants the
+  names whole in the buttons too.
+
 ## 1.2.0
 
 - **Move names print whole.** The tile font is 8 pixels a glyph and a classic
