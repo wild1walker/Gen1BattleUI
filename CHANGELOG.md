@@ -1,5 +1,28 @@
 # Changelog
 
+## 1.1.1
+
+- **The move panel no longer covers the player's HP.** 1.1.0 drew it twenty
+  tiles wide across rows 8-11; `DrawPlayerHUDAndHPBar` puts the name, level,
+  HP bar, HP numbers and underline across rows 7-11 from x=72 rightwards, so
+  the panel wiped every one of them but the name. Choosing a move is the one
+  moment that screen exists to inform, and it was the moment your own HP went
+  away.
+- The panel now keeps the footprint of the vanilla box it stands in for:
+  `(0,8)` 11x5, `PrintMenuItem`'s TYPE/PP box, with the name, type and PP on
+  its three interior rows. That is also what keeps everything *else* clear --
+  anything another mod draws on that side of the screen, an EXP bar included,
+  was laid out around the vanilla box and not around this one.
+- The cost is the name: nine glyphs where 1.1.0 had eighteen, against the
+  cell's seven. `QUICK ATTACK` reads `QUICK AT.` in the panel and `QUICK.` on
+  the button.
+- Mimic's panel keeps `.mimicmenu`'s `(0,7)` box and takes two tiles more than
+  its 16 -- that box already covers the HP bar and numbers in vanilla, so the
+  rule above was never one that screen kept, and the two tiles are what give
+  `WHICH TECHNIQUE?` its sixteenth glyph.
+- A test now asserts the rule directly: above the button strip, nothing this
+  mod draws may reach the column the HP numbers start in.
+
 ## 1.1.0
 
 - **`ITEM` no longer clears the buttons away.** The bag's item list is the one

@@ -32,12 +32,12 @@ return {
     added = {
       "opening the bag leaves the buttons up and marks ITEM with a hollow hand rather than clearing them away: the item list is the one list in the game that is not a screen of its own (ListMenu's itemBox, isOpaque = false, sixteen tiles at (4,2)), so it stops at y=103 and the strip underneath it is still on screen",
       "that state is deliberately not claimed through battle.bottom_ui_visible -- a false for the battle would take the bag's own How many?, YES/NO and use message with it, since every box above a battle inherits the battle's answer -- so the engine keeps drawing its empty box and the buttons go over the top of it, into the same pixels",
-      "a panel above the move grid with the highlighted move's FULL name, its type and its PP -- which the vanilla list never showed at once -- in the place the vanilla TYPE/PP box occupied and covering what it covered",
+      "a panel above the move grid with the highlighted move's name, its type and its PP -- which the vanilla list never showed at once -- keeping the footprint of the vanilla TYPE/PP box at (0,8) 11x5, because the player's own HUD runs across rows 7-11 from x=72 rightwards and a wider panel covers their HP while they choose a move",
       "MOVE PANEL in the mod manager, which gives the picture behind it back, and on the widescreen layout gives its ten tiles to the grid rather than leaving a hole in the frame",
       "the mod's geometry on mod.exports, in tile coordinates, so a mod that wants to sit beside these buttons can find out where they are",
     },
     known = {
-      "seven glyphs is seven glyphs: no arrangement of two columns inside 160 pixels gives THUNDERSHOCK its full name in a cell, and the panel above is the answer rather than an apology for one",
+      "seven glyphs is seven glyphs: no arrangement of two columns inside 160 pixels gives THUNDERSHOCK its full name in a cell, and the panel above buys nine of them rather than all twelve -- the vanilla box it keeps the footprint of is eleven tiles, and the pixels either side of it are the player's own HP",
       "THROW ROCK is ten glyphs against seven in a Safari battle and reads THROW.; the widescreen layout has the room and prints it whole",
       "the overlay draws after the palette pass, so the buttons are black on white and are not recoloured by a COLORS zone the way the vanilla strip's border is -- the same picture on the default look, and not under a mode that tints the text box",
       "nothing about what the menus DO is replaced: every index, key and callback is still the engine's, so anything wrong with what the battle menu does is not this mod",

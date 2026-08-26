@@ -223,12 +223,40 @@ do
 
   -- the four buttons plus the panel above them
   T.eq(#drawn.boxes, 5, "the move menu is four buttons and a panel")
-  T.check(hasBox(drawn, 0, 8, 20, 4), "the panel is full width, above the grid")
+  T.check(hasBox(drawn, 0, 8, 11, 5),
+          "the panel keeps the vanilla TYPE/PP box's footprint")
 
-  -- The panel carries the highlighted move's name in full -- which is what
-  -- the cells cannot do and why the panel is there.
-  T.check(findText(drawn, "THUNDERSHOCK") ~= nil,
-          "the panel names the highlighted move in full")
+  -- ------- and stays off the player's own HUD
+  --
+  -- DrawPlayerHUDAndHPBar puts the name, level, HP bar, HP numbers and the
+  -- underline across rows 7-11 from x=72 rightwards.  1.1.0's panel was
+  -- twenty tiles wide across rows 8-11 and wiped every one of them, which is
+  -- the bug this asserts against: above the button strip, nothing this mod
+  -- draws may reach the column the HP numbers start in.
+  local HUD_X, STRIP_Y = 88, 96
+  for _, b in ipairs(drawn.boxes) do
+    if b.ty * 8 < STRIP_Y then
+      T.check((b.tx + b.tw) * 8 <= HUD_X,
+              ("a box at tile %d spanning %d stays clear of the HUD")
+                :format(b.tx, b.tw))
+    end
+  end
+  for _, t in ipairs(drawn.text) do
+    if t.y < STRIP_Y then
+      T.check(t.x + t.w <= HUD_X,
+              ("%q stays clear of the player's HP"):format(t.text))
+    end
+  end
+
+  -- Nine glyphs is what that footprint leaves, against the cell's seven, so
+  -- the panel says more than the button under it and still not everything.
+  local panelName
+  for _, t in ipairs(drawn.text) do
+    if t.y < STRIP_Y and t.text:match("^THUNDER") then panelName = t end
+  end
+  T.check(panelName ~= nil, "the panel names the highlighted move")
+  T.check(panelName and panelName.w <= 72,
+          "inside the nine glyphs its box has")
 
   local cellLabels = 0
   for _, t in ipairs(drawn.text) do
@@ -261,6 +289,10 @@ do
   T.check(findText(drawn, "FIX EMBER") ~= nil, "the panel names the move")
   T.check(findText(drawn, "FIRE") ~= nil, "the panel gives its type")
   T.check(findText(drawn, "PP 20/25") ~= nil, "the panel gives its PP")
+  -- stacked top-down in the box's three interior rows, rows 9, 10 and 11
+  T.eq(findText(drawn, "FIX EMBER").y, 9 * 8, "the name on the first row")
+  T.eq(findText(drawn, "FIRE").y, 10 * 8, "the type under it")
+  T.eq(findText(drawn, "PP 20/25").y, 11 * 8, "and the PP under that")
 
   local off = record(fakeBattle({ phase = "moveSelect", moveIndex = 1,
                                   disabled = 1 }))
@@ -272,8 +304,11 @@ end
 -- clips the player's picture to row 7 for it and to row 8 for move select.
 do
   local drawn = record(fakeBattle({ phase = "mimicSelect", mimicIndex = 2 }))
-  T.check(hasBox(drawn, 0, 7, 20, 5), "Mimic's panel starts a row higher")
-  T.check(findText(drawn, "WHICH TECHNIQUE?") ~= nil, "and asks the question")
+  T.check(hasBox(drawn, 0, 7, 18, 6), "Mimic's panel is the wider box")
+  -- sixteen glyphs, which is what those two extra tiles are for
+  local q = findText(drawn, "WHICH TECHNIQUE?")
+  T.check(q ~= nil, "and asks the question whole, uncut")
+  T.check(q and q.w <= 16 * 8, "inside the interior it has")
   T.eq(#hands(drawn), 1, "with the hand on the copied slot")
 end
 

@@ -106,10 +106,19 @@ names are cut, with the engine's own trailing-dot idiom:
 | `SAND-ATTACK` | `SAND-A.` |
 
 That is the real price of the layout, and it is paid back rather than hidden.
-The panel above the grid carries the highlighted move's **full name**, its
-type and its PP — which the vanilla list never showed all at once either, and
-it sits exactly where the vanilla `TYPE/PP` box sat, covering what that box
-covered.
+The panel above the grid carries the highlighted move's name, its type and its
+PP — which the vanilla list never showed all at once either.
+
+The panel keeps the footprint of the vanilla box it stands in for, `(0,8)`
+11×5, and that is not a style choice. `DrawPlayerHUDAndHPBar` puts the name,
+level, HP bar, HP numbers and underline across rows 7–11 from x=72 rightwards,
+so a panel any wider covers the player's own HP while they are choosing a
+move. It is also what keeps everything *else* clear: anything another mod
+draws on that side of the screen — an EXP bar, for one — was laid out around
+the vanilla box, not around this one.
+
+So the panel is nine glyphs against the cell's seven: `QUICK ATTACK` reads
+`QUICK AT.` there and `QUICK.` on the button.
 
 **`MOVE PANEL`** in the mod manager turns it off and gives the picture behind
 it back.
@@ -135,7 +144,7 @@ panel keeps its ten tiles on the right.
 
 | Row | Default | What it does |
 | --- | --- | --- |
-| `MOVE PANEL` | on | The full name, type and PP of the highlighted move, above the grid. Off gives the picture behind it back — and, on the wide layout, gives its ten tiles to the grid, because a strip that stops short of the screen edge is a hole in the frame rather than a saving. |
+| `MOVE PANEL` | on | The name, type and PP of the highlighted move, above the grid, in the vanilla `TYPE/PP` box's footprint. Off gives the picture behind it back — and, on the wide layout, gives its ten tiles to the grid, because a strip that stops short of the screen edge is a hole in the frame rather than a saving. |
 
 ---
 
@@ -153,7 +162,9 @@ panel keeps its ten tiles on the right.
 
 - **Seven glyphs is seven glyphs.** `THUNDERSHOCK` reads `THUNDE.` in its
   cell, and no arrangement of two columns inside 160 pixels changes that. The
-  panel above is the answer, and turning it off is choosing not to have one.
+  panel buys nine of the twelve back, not all of them — it is eleven tiles
+  because the pixels either side of it are the player's own HP — and turning
+  it off is choosing not to have even those.
 - **`THROW ROCK` is cut in a Safari battle** — ten glyphs against seven. It
   reads `THROW.`, with the trailing space taken off the cut rather than left
   as `THROW .`. The wide layout has room and prints it whole.
