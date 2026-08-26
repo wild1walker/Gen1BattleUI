@@ -5,14 +5,11 @@
 -- actually have.  What that mod carries and this does not is its whole
 -- other-mods surface -- the registerColors and registerColorResolver
 -- registries, the colours it keeps for Custom Poke Balls, Too Many Balls
--- and Snag Quest, and the mart-stocking dev toggle.  A ball from a mod is
--- that mod's business and Pokeball Colors is where it is answered; this
--- is the battle UI mod colouring the balls the battle UI already draws.
--- Which is also why the deference below exists: with that mod installed,
--- this file stands down whole.
---
--- Its heal machines are left behind too, on both generations, and for a
--- different reason -- see the Pokemon Center note further down.
+-- and Snag Quest, the Gold heal machine, and the mart-stocking dev
+-- toggle.  A ball from a mod is that mod's business and Pokeball Colors
+-- is where it is answered; this is the battle UI mod colouring the balls
+-- the battle UI already draws.  Which is also why the deference below
+-- exists: with that mod installed, this file stands down whole.
 --
 -- ------- what is wrong without it
 --
@@ -55,31 +52,47 @@
 -- spiral-ball emitters all draw from these same tiles -- and would
 -- collide with any other mod patching that record.
 --
--- ------- what is deliberately NOT here: the Pokemon Center
+-- ------- and at the Pokemon Center
 --
--- Pokeball Colors lights each ball in the heal machine in the colours of
--- the ball that Pokemon was caught in, and this port had it too for one
--- commit.  It is gone, because of what it costs to know the answer.
+-- The heal machine lights one ball per party member and paints them all
+-- the same.  The engine records nothing about what caught a Pokemon, so
+-- this does: `pokemon.caught` carries the live mon table and the ball id
+-- (BattleState.lua:5261), and the machine reads it back off the party.
+-- Never overwritten once set, so a Pokemon caught while some other mod
+-- owned that field keeps the answer that mod gave.
 --
--- Gen 1 does not record what caught a Pokemon.  Not in the engine and
--- not in the ROM it is a recompilation of: the party struct is species,
--- HP, status, types, catch rate, moves, OT, exp, stat exp, DVs, PP and
--- level, and there is no ball anywhere in it -- caught data arrives with
--- Gen 2 and a real per-Pokemon ball field with Gen 3.  So the machine
--- cannot be told which ball to light; it can only be told by a field the
--- mod invents, writes at catch time and leaves in the player's save
--- forever, on every Pokemon they ever catch.
+-- ------- and this one DOES write to the save.  Say so plainly.
 --
--- That is a bigger thing than the feature it buys.  A battle UI mod
--- should be removable, and a save that carries a field this mod made up
--- long after it is uninstalled is not that.  So the machine keeps its own
--- one palette, and the mod stays inside the battle where the ball
--- actually is -- where the engine already knows which ball is in flight
--- and nobody has to write anything down.
+-- Gen 1 records nothing about what caught a Pokemon.  Not in the engine
+-- -- Pokemon.new builds species, level, exp, dvs, statExp, stats, hp,
+-- catchRate, status and moves -- and not in the ROM it recompiles, whose
+-- party struct has no ball anywhere in it.  Caught data arrives with
+-- Gen 2 and a real per-Pokemon ball field with Gen 3.  So this feature
+-- cannot be free: it exists only because a field is invented.
 --
--- Pokeball Colors is still the mod for the Center, and it owns the
--- mon.caughtBall field that makes it possible.  Nothing here reads or
--- writes it.
+-- `mon.caughtBall` goes onto the mon table, which IS save.party[i], and
+-- SaveSerializer.encode is a generic pairs() recursion that writes every
+-- key it finds -- so the field lands in the save file beside `species`
+-- and `dvs`, and it stays there after this mod is uninstalled.  One
+-- string per Pokemon caught, and nothing reads it but this and Pokeball
+-- Colors.
+--
+-- The engine does offer a namespaced alternative: mod.save:get/set,
+-- backed by save.modData["Gen1BattleUI"], a per-mod bucket with its own
+-- version-keyed migration chain (Loader.lua:1349).  It is not used here,
+-- deliberately.  A side table needs a key and a Gen 1 Pokemon has no
+-- unique id -- the engine mints none -- so the best available key is a
+-- content fingerprint (OT id, nickname, DVs), which is a heuristic that
+-- can collide, and a party slot, which cannot survive a deposit.  A
+-- field ON the Pokemon needs no key at all: it goes where the Pokemon
+-- goes, through the box, through a trade, forever.  It is also the field
+-- Pokeball Colors already owns and already writes by the same
+-- only-if-absent rule, which is what lets the two of them share a save
+-- and never disagree.
+--
+-- The trade, stated once so it is not discovered: a removable mod that
+-- leaves nothing behind was worth less here than the feature working on
+-- the Pokemon rather than on a guess about which Pokemon it is.
 --
 -- Untouched on purpose: POOF clouds (ambient zone colours, as vanilla),
 -- every non-ball animation, every colour mode except ADVANCED -- the
@@ -148,6 +161,11 @@ local BAND_TILES = {
 -- (tools/extract/gfx.py GB_SHADES).  LOVE 11 takes 0-1 floats.
 local SHADE_BODY, SHADE_LINE = 85 / 255, 0
 
+-- The heal machine's own flash beat: FlashSprite8Times swaps the two
+-- middle shades in place, and a recoloured ball has to flash with the
+-- rest of the machine rather than sit still through the jingle.
+local HEAL_FLASH_MAP = { [0] = 0, [1] = 2, [2] = 1, [3] = 3 }
+
 return function(mod, C)
   local Balls = {}
 
@@ -180,6 +198,7 @@ return function(mod, C)
   local PaletteFX = need("src.render.PaletteFX")
   local BattleState = need("src.battle.BattleState")
   local AnimPlayer = need("src.battle.AnimPlayer")
+  local OverworldState = need("src.world.OverworldController")
   local Runtime = need("src.mods.Runtime")
 
   -- The mod manager's [ERRS] screen is the only channel that says
@@ -194,6 +213,7 @@ return function(mod, C)
     end
   end
 
+  local gameRef              -- the live game, from game.ready
   local activeBattle         -- the BattleState whose ball chain is running
 
   -- ------- standing down for the mod this came from
@@ -335,6 +355,27 @@ return function(mod, C)
       or (ap._g1bMove and BALL_MOVES[ap._g1bMove]
           and activeBattle and activeBattle._g1bBall)
       or nil
+  end
+
+  -- ------- the Pokemon Center's palette
+  --
+  -- Built the same way the machine's own jingle flash is built: fxHeal
+  -- sends permuted GRAYS through the same shader, so a ball painted this
+  -- way is the machine's own effect in different colours rather than
+  -- something drawn over the top of it.
+  --
+  -- `line` is deliberately not used here.  The machine draws a DIFFERENT
+  -- sprite -- the heal machine sheet's ball quad, not the anim tilesheet
+  -- -- so its darkest shade is an outline and not a seam, and a band and
+  -- an outline are not the same region.  The machine keeps the darkened
+  -- body it has always had.
+  local function ballPalette(c, flashed)
+    local dark = { math.floor(c.body[1] * 0.35),
+                   math.floor(c.body[2] * 0.35),
+                   math.floor(c.body[3] * 0.35) }
+    local pal = { PaletteFX.GRAYS[1], c.accent, c.body, dark }
+    if flashed then pal = PaletteFX.permute(pal, HEAL_FLASH_MAP) end
+    return pal
   end
 
   -- ------- installing
@@ -488,13 +529,121 @@ return function(mod, C)
       return { accent, body, dark }
     end
 
-    -- Nothing is written to the save, and nothing is subscribed to except
-    -- this: the ball in flight is a thing the engine already knows for
-    -- exactly as long as it is in flight, and asking it in the moment is
-    -- the whole reason this feature needs no field of its own.  See the
-    -- Pokemon Center note at the top of this file.
+    -- ------- what caught this Pokemon
+    --
+    -- Written only when the field is empty, so a Pokemon caught while
+    -- another mod owned it keeps that mod's answer and the two can never
+    -- disagree.  Absent on anything caught before this version, which
+    -- the Center reads as a POKE BALL -- canon enough, and it corrects
+    -- itself as the party turns over.
     if type(mod.events) == "table" and type(mod.events.on) == "function" then
-      mod.events:on("game.ready", function() checkDeference() end)
+      mod.events:on("pokemon.caught", function(p)
+        if deferring then return end
+        if not (p and p.mon and p.ball) then return end
+        if p.mon.caughtBall == nil then p.mon.caughtBall = p.ball end
+      end)
+      mod.events:on("game.ready", function(p)
+        gameRef = p and p.game
+        checkDeference()
+      end)
+    else
+      warn("Gen1BattleUI has no event bus to hear catches on; the heal "
+           .. "machine keeps its one palette")
+    end
+
+    local okCenter, centerProblem = Balls.installCenter()
+    if not okCenter then
+      warn("Gen1BattleUI is not colouring the Pokemon Center balls: %s",
+           tostring(centerProblem))
+    end
+    return true
+  end
+
+  -- ------- the Pokemon Center heal machine
+  --
+  -- fxHeal is a LOCAL closure inside OverworldState:drawWorld
+  -- (OverworldController.lua:4522), so it cannot be wrapped, and
+  -- drawWorld pushes and pops transforms internally so drawing after it
+  -- returns lands in the wrong space.  Instead: wrap drawWorld, and ONLY
+  -- while self.healAnim exists, temporarily shim love.graphics.draw.
+  --
+  -- The shim recognises the ball draws exactly -- the image is
+  -- self.healMachineImg AND the quad is self.healMachineQuads[2], the
+  -- ball quad, where [1] is the monitor -- counts them, and the i-th
+  -- ball is party slot i, because stepHealAnim lights them in party
+  -- order.  It exists for the few seconds the animation runs and is
+  -- restored through pcall even if vanilla throws.
+  --
+  -- The `type(...) == "function"` gate is a capability check, not a
+  -- version one: on a Gen 2 boot this require resolves to the adapter
+  -- facade, where drawWorld has no backing and reads nil.  Installing
+  -- over that would write a wrapper nothing calls and stash a nil
+  -- "original".  Gold's heal machine is a different screen with its own
+  -- seam, and Gold is not this mod's generation.
+  function Balls.installCenter()
+    if not (OverworldState and PaletteFX
+            and type(OverworldState.drawWorld) == "function") then
+      return false, "this engine has no Pokemon Center seam to draw into"
+    end
+    -- The machine is painted with the machine's OWN effect -- the same
+    -- shader its jingle flash sends permuted greys through -- so a host
+    -- missing any part of that is one where the balls stay as they were,
+    -- not one where they are drawn some other way.
+    if not (type(PaletteFX.shader) == "function"
+            and type(PaletteFX.sendColors) == "function"
+            and type(PaletteFX.permute) == "function"
+            and type(PaletteFX.GRAYS) == "table") then
+      return false, "this engine's palette pass has no shader to borrow"
+    end
+
+    OverworldState._g1bOriginals = OverworldState._g1bOriginals
+      or { drawWorld = OverworldState.drawWorld }
+    -- Read out of the table on the call rather than closed over, which the
+    -- battle wraps above deliberately do not do: those are asked once per
+    -- OAM sprite and this is asked once per frame, so the table index is
+    -- free here and buys the suite a seam it can put a counter behind.
+    -- "The shim is not installed on a frame that is not a heal" is a claim
+    -- about a whole map draw, and standing up a live OverworldState to
+    -- check it would be a test of the engine rather than of this.
+    local function vanillaDrawWorld(self, ...)
+      return OverworldState._g1bOriginals.drawWorld(self, ...)
+    end
+    OverworldState.drawWorld = function(self, ...)
+      local ha = self.healAnim
+      if not (ha and active() and C.option("center_balls", true)) then
+        return vanillaDrawWorld(self, ...)
+      end
+
+      local lg = love.graphics
+      local vanillaDraw = lg.draw
+      local ballIndex = 0
+      lg.draw = function(img, quad, ...)
+        if img ~= nil and img == self.healMachineImg
+           and self.healMachineQuads and quad == self.healMachineQuads[2] then
+          ballIndex = ballIndex + 1
+          local party = gameRef and gameRef.save and gameRef.save.party
+          local mon = party and party[ballIndex]
+          local ball = (mon and mon.caughtBall) or "POKE_BALL"
+          local c = COLORS[ball]
+          if not c then warnMissingColor(ball) end
+          if c then
+            local sh = PaletteFX.shader()
+            if sh then
+              local prev = lg.getShader()
+              PaletteFX.sendColors(sh, ballPalette(c, not ha.visible))
+              lg.setShader(sh)
+              vanillaDraw(img, quad, ...)
+              lg.setShader(prev)
+              return
+            end
+          end
+        end
+        return vanillaDraw(img, quad, ...)
+      end
+
+      local ok, err = pcall(vanillaDrawWorld, self, ...)
+      lg.draw = vanillaDraw
+      if not ok then error(err) end
     end
 
     return true
