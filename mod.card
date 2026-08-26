@@ -7,9 +7,9 @@ return {
   author = "wild1walker",
   tags = { "ui", "battle", "menu", "buttons", "moves", "colour", "xp" },
   credits = {
-    { who = "Gen1Recomp", for_ = "the three battle hooks this is built on -- "
-      .. "battle.overlay, battle.bottom_ui_visible and "
-      .. "battle.move_grid_navigation" },
+    { who = "Gen1Recomp", for_ = "the four battle hooks this is built on -- "
+      .. "battle.overlay, battle.bottom_ui_visible, "
+      .. "battle.move_grid_navigation and battle.exp_award" },
     { who = "pret/pokered", for_ = "engine/battle/core.asm, whose "
       .. "DisplayBattleMenu and MoveSelectionMenu are the two screens this "
       .. "re-dresses, and whose 2x2 reading of the menu index is why the "
@@ -48,9 +48,16 @@ return {
       "MOVE PANEL in the mod manager, which gives the picture behind it back, and on the widescreen layout gives its ten tiles to the grid rather than leaving a hole in the frame",
       "a Gen 2 style XP bar under the player's Pokemon, filling towards the next level with Gen 2's fill-hold-burst-refill on a level up, and stopping once that Pokemon faints and the engine clears the HUD out from under it. XP BAR in the mod manager, on by default",
       "the XP bar is drawn BEFORE the button grid in the same function, which is why it no longer lies across the move panel: it was Gen1WildQOL's until 1.3.0, drawn by a wrapper around battle.draw that runs after every battle.overlay link whatever priority they carry, so it could not be drawn over and clipped itself to x=88 -- the VANILLA panel's edge -- while this mod's panel ends at 112. An order needs no clip and stays right when the panel changes width",
+      "the level-up stat window comes up OVER the line that announced it: the engine queues \"X grew to level N!\" as a prompt row and the stat box as the row behind it, so the line is dismissed and cleared before the box is pushed and the text box under it is left blank, while GrewLevelText ends in text_end rather than prompt (experience.asm:369-372) and PrintStatsBox draws into the screen that line is still on",
+      "which is done by re-marking the two rows the award already queued rather than by queueing anything: the line becomes the engine's own auto row -- the kind whose path sets msgHold, \"the typed page stays drawn behind whatever runs next\" -- and the level-up jingle moves onto the stat box's own factory, because the auto path never asks a row for its sound",
+      "nothing is inserted, deliberately: the queue's inserts are positional and the exp award is not the last thing a faint queues -- the trainer's \"sent out X!\" goes in afterwards, by position -- so a row added in the middle of the exp rows would slide that line into the middle of them too",
+      "LEVEL-UP BOX in the mod manager, on by default; off is the engine's two screens",
       "the mod's geometry on mod.exports, in tile coordinates, so a mod that wants to sit beside these buttons can find out where they are, and panelRect(battle) in game pixels for anything that draws after this mod and must not be drawn over",
     },
     known = {
+      "the level-up jingle loses WaitForSoundToFinish, because the stat box it now rides in with parks the queue on waitingUI until it is dismissed, which is the clear window that wait was there to give it; mash through the box fast enough and the next line starts over its tail",
+      "the level-up rows are named by their TEXT, built through the same Strings call the engine builds them with from the levels battle.exp_gained announces, because \"a message carrying a sound in front of a UI row\" is also \"X learned MOVE!\" in front of the forget menu; a wording change upstream is a level-up that keeps the engine's two screens rather than a learned-move line that loses its prompt",
+      "a RARE CANDY outside a battle is unchanged: that level-up is the party menu's, printed through the map's own text box rather than the battle's queue",
       "the XP bar's 3D-battle path is deliberately not carried over from Gen1WildQOL: it drew into another mod's canvas through a handshake with that mod's snapHUDs, and the handshake decided whether the path was taken at all, so porting it without the handshake would take that path whenever the other mod was loaded",
       "the small face is NOT the game's font, so a font mod or a skin that redraws the tile sheet does not reach it -- unlike the boxes, which are Font.drawBox and do; that is the trade FULL NAMES makes, and off is the way out of it",
       "the engine's own whole-game TTF mode is deliberately not switched on: that is a font swap for every screen in the game, and a battle mod has no business making one",

@@ -1,5 +1,38 @@
 # Changelog
 
+## 1.4.0
+
+- **The level-up stat box comes up over the line that announced it.** Reported
+  as "the stat pop-up shows with the chat box blank" — and it did: the engine
+  queued `X grew to level N!` as a prompt row and the stat window as the row
+  behind it, so the line was dismissed and cleared before the window was
+  pushed. Two screens, two presses, and the second one with nothing on it
+  saying what the numbers belonged to.
+- **The ROM prints one screen.** `GrewLevelText` ends in `text_end` rather than
+  `prompt` (`engine/battle/experience.asm:369-372`), so `PrintText` returns
+  without blinking the arrow and `PrintStatsBox` draws into the screen that
+  line is still on; the press that follows takes both away.
+- **So the line is re-marked, not redrawn.** It becomes the engine's own
+  `auto` row — the kind whose path sets `msgHold`, which is exactly "the typed
+  page stays drawn behind whatever runs next" — and the level-up jingle moves
+  onto the stat box's own factory, because the auto path never asks a row for
+  its sound. It rings once, as the box opens, which is where
+  `sound_level_up` rings in the ROM.
+- **Nothing is queued and nothing is inserted.** The queue's own inserts are
+  positional, and the exp award is not the last thing a faint queues — the
+  trainer's `sent out X!` goes in afterwards, by position. A row added in the
+  middle of the exp rows would have slid that line into the middle of them
+  too. Two flags moved between two existing rows move nothing.
+- The rows are named by their **text**, built through the same `Strings` call
+  the engine builds them with from the levels `battle.exp_gained` announces:
+  "a message carrying a sound in front of a UI row" is also `X learned MOVE!`
+  in front of the forget menu, and that one keeps its prompt.
+- **`LEVEL-UP BOX`** in the mod manager, on by default; off is the engine's
+  two screens.
+- The suite drives the engine's own `updateQueue` and `drawTextArea` over both
+  cases, so "the box under the stat window is not blank" is checked as the
+  glyphs that actually go down in it.
+
 ## 1.3.0
 
 - **The XP bar lives here now.** It was Gen1WildQOL's — one of the four
