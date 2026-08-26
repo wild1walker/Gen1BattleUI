@@ -253,28 +253,32 @@ other battle animation are left exactly as vanilla, and so is every colour
 mode that is not `ADVANCED`: those deliberately have no per-sprite colour to
 give, and their `nil` is passed straight through.
 
-### And at the Pokémon Center
+### Not at the Pokémon Center, and why
 
-The heal machine lights one ball per party member and painted all six the
-same. Now each one is the ball that Pokémon was **caught** in — a party of
-`GREAT BALL` catches heals blue.
+Pokeball Colors lights each ball in the heal machine in the colours of the
+ball that Pokémon was caught in. That is not here, and it is the one piece of
+it that was deliberately left behind rather than simply scoped out.
 
-Nothing in the engine records what caught a Pokémon, so this does:
-`pokemon.caught` carries the live mon and the ball id, and an arbitrary field
-on a mon survives the save, because `SaveSerializer` is a generic recursive
-dump. It is written only into an empty field and never over one, which is the
-rule that lets this share a save with the mod it came from. Anything caught
-before you installed this reads as a `POKE BALL`, and corrects itself as the
-party turns over.
+**Gen 1 does not record what caught a Pokémon.** Not in the engine, and not in
+the ROM it is a recompilation of: the party structure is species, HP, status,
+types, catch rate, moves, OT, exp, stat exp, DVs, PP and level, and there is
+no ball anywhere in it. Caught data arrives with Gen 2; a real per-Pokémon
+ball field arrives with Gen 3.
 
-`fxHeal` is a *local* closure inside `OverworldState:drawWorld` and cannot be
-wrapped, and drawing after `drawWorld` returns lands in the wrong space — so
-`drawWorld` is wrapped instead, and only while a heal is actually running is
-`love.graphics.draw` shimmed. The shim recognises the ball draws exactly (that
-image, that quad), counts them, and the i-th is party slot i, because the
-machine lights them in party order. It paints through the same shader the
-machine's own jingle flash uses, so a recoloured ball flashes with the rest of
-the machine instead of sitting still through it.
+So the machine cannot be *told* which ball to light. It can only be told by a
+field the mod invents, writes at catch time, and leaves in your save forever,
+on every Pokémon you ever catch. That is a bigger thing than the feature it
+buys — a battle UI mod should be removable, and a save still carrying a field
+this mod made up long after it is uninstalled is not that.
+
+The battle is different, and that is the whole point: there the engine already
+knows which ball is in flight, for exactly as long as it is in flight. Nothing
+has to be written down. This mod subscribes to no catch, owns no field on a
+Pokémon and adds no byte to your save.
+
+If you want the Center, **Pokeball Colors** does it, and owns the
+`mon.caughtBall` field that makes it possible. Install it and this mod's ball
+colouring stands down in its favour.
 
 ### Where this came from, and what was left behind
 
@@ -285,9 +289,9 @@ native balls and nothing else.
 
 Left behind on purpose: its `registerColors` and `registerColorResolver`
 registries, the colours it keeps for **Custom Poké Balls**, **Too Many Balls**
-and **Snag Quest**, its Gold heal machine, and its dev toggle that stocks every
-ball in every mart. A ball from a mod is that mod's business, and that mod is
-where it is answered — **install Pokeball Colors and this file stands down
+and **Snag Quest**, its Gold heal machine, its dev toggle that stocks every
+ball in every mart — and its Pokémon Center, for the reason above. A ball from
+a mod is that mod's business, and that mod is where it is answered — **install Pokeball Colors and this file stands down
 whole**, colours and Center and all, rather than the two of them wrapping one
 funnel and arguing about it.
 
@@ -303,7 +307,6 @@ funnel and arguing about it.
 | `LEVEL-UP BOX` | on | The level-up stat window over the `grew to level` line rather than after it, dismissed together, the way `text_end` + `PrintStatsBox` prints it in the ROM. Off is the engine's two screens, with the text box under the window blank. |
 | `BALL COLOUR` | on | The ball you throw in its own colours — the toss, the wobbles and the ball resting through the caught text — for the five balls Red, Blue and Yellow ship with. `COLORS = ADVANCED` only; the mono modes have no per-sprite colour to give and are passed through whatever this says. |
 | `BALL BAND` | on | The black band along a thrown ball's seam, which needs the re-indexed art to have a third region to paint. Off is the two-tone ball on the game's own tiles, which is what a thrown ball looked like before it. |
-| `CENTER BALLS` | on | The Pokémon Center heal machine, lighting each ball in the colours of the ball that Pokémon was caught in. Off is the machine's own one palette for all six. |
 | `FULL NAMES` | off | Move names in the engine's Plain Pixel when they will not fit the tile font, so they print whole in the buttons too. Off — the default — is the game's own font always, cut to the cell, and the panel above is what reads the whole name. |
 
 ---
@@ -366,9 +369,11 @@ funnel and arguing about it.
   Master/Ultra palette flicker, which is on the hardware, in the ball's own
   colours now — and it stops at the wobbles because `SHAKE_ANIM` never
   flickers.
-- **Pokémon caught before this installed heal as `POKE BALL`,** because there
-  was nothing recording what caught them. It corrects itself as the party
-  turns over.
+- **The Pokémon Center is not coloured,** and will not be. Knowing which ball
+  caught a Pokémon means inventing a field Gen 1 never had and leaving it in
+  your save forever; the battle needs no such thing, because the engine knows
+  which ball is in flight while it is in flight. Pokeball Colors is the mod
+  that does the Center.
 - **A throw while drawing costs a frame's buttons, not the battle.** The draw
   is wrapped and logged; a load-time failure is *not* swallowed, and marks the
   row enabled-but-broken in `MODS` with the reason, because an enabled mod

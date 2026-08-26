@@ -8,21 +8,27 @@
   BALL came out the same colour as each other and as the grass behind them.
   The toss, the wobbles and the ball resting through the caught text are now
   each ball's own: red, blue, gold, purple, olive.
-- **And at the Pokémon Center.** The heal machine lit one ball per party
-  member and painted all six the same; each one is now the ball that Pokémon
-  was *caught* in. Nothing in the engine records that, so this does —
-  `pokemon.caught` carries the live mon and the ball id, and an arbitrary
-  field on a mon survives the save. Written only into an empty field and never
-  over one, which is the rule that lets it share a save with the mod it came
-  from. Anything caught before this installed heals as a POKE BALL and
-  corrects itself as the party turns over.
+- **The Pokémon Center is deliberately not coloured.** Pokeball Colors lights
+  each ball in the heal machine in the colours of the ball that Pokémon was
+  caught in, and this is the one piece of it that was left behind rather than
+  simply scoped out. Gen 1 records nothing about what caught a Pokémon — not
+  in the engine, and not in the ROM it recompiles, whose party struct is
+  species, HP, status, types, catch rate, moves, OT, exp, stat exp, DVs, PP
+  and level with no ball anywhere in it. Caught data arrives with Gen 2 and a
+  real per-Pokémon ball field with Gen 3. So the machine can only be told by a
+  field the mod invents, writes at catch time and leaves in the save forever,
+  which is a bigger thing than the feature it buys: a battle UI mod should be
+  removable. **This mod subscribes to no catch, owns no field on a Pokémon and
+  adds no byte to a save** — in a battle the engine already knows which ball
+  is in flight, which is why that half needs nothing written down. Pokeball
+  Colors is still the mod for the Center.
 - **Ported from [Pokeball
   Colors](https://github.com/mistermiracle3036/Pokeball-Colors)** by Mister
   Miracle (MIT), cut to what Red, Blue and Yellow actually ship: the five
   native balls. Its `registerColors` and `registerColorResolver` registries,
   its colours for Custom Poké Balls, Too Many Balls and Snag Quest, its Gold
-  heal machine and its every-ball-in-marts dev toggle are all deliberately
-  left over there. **Install that mod and this one stands down whole** —
+  heal machine, its every-ball-in-marts dev toggle and its Pokémon Center are
+  all deliberately left over there. **Install that mod and this one stands down whole** —
   colours, Center and all — rather than the two of them wrapping one funnel
   and arguing about it.
 - **The band along the seam is a third colour a two-tone sprite does not
@@ -41,8 +47,7 @@
   frames — and of the five native balls the one with no band is the ULTRA
   BALL, which is also one of the two that flicker. Here the band and its
   fallback are both taken from the unswapped body and only the pair swaps.
-- **`BALL COLOUR`, `BALL BAND` and `CENTER BALLS`** in the mod manager, all on
-  by default. `ADVANCED` only, throughout: the mono modes deliberately have no
+- **`BALL COLOUR` and `BALL BAND`** in the mod manager, both on by default. `ADVANCED` only, throughout: the mono modes deliberately have no
   per-sprite colour to give, and their `nil` is passed straight through.
 - The suite drives the engine's own `ballChain` and `AnimPlayer.start` and
   reads the colours back out of `animSpriteColors`, so "every sprite that is

@@ -1177,11 +1177,9 @@ end
 -- The ball colouring is the one part of this mod that is not a hook,
 -- because there is no hook to ask for it: BattleState:animSpriteColors is
 -- the single funnel every anim-layer OAM sprite's colour comes out of, and
--- the heal machine's balls are drawn from a closure inside
--- OverworldState:drawWorld.  Both are wrapped directly, so what is checked
--- here is that they are wrapped AROUND the engine rather than over it --
--- every sprite that is not a ball comes back with the engine's own answer,
--- byte for byte.
+-- it is wrapped directly.  So what is checked here is that it is wrapped
+-- AROUND the engine rather than over it -- every sprite that is not a ball
+-- comes back with the engine's own answer, byte for byte.
 --
 -- Driven through the engine's own entry points (ballChain, AnimPlayer.start)
 -- rather than by poking the trackers, because "which ball is in flight" is
@@ -1191,7 +1189,6 @@ do
   local BattleState = require("src.battle.BattleState")
   local AnimPlayer = require("src.battle.AnimPlayer")
   local PaletteFX = require("src.render.PaletteFX")
-  local OverworldState = require("src.world.OverworldController")
 
   local colors = exports.ballColors
   T.check(type(colors) == "table", "the mod publishes its ball colours")
@@ -1386,36 +1383,24 @@ do
 
   PaletteFX.mode = previousMode
 
-  -- ------- what caught this Pokemon
+  -- ------- nothing is written down
   --
-  -- The engine records it nowhere, so this mod does -- and writes it only
-  -- into an empty field, which is the rule that lets it share a save with
-  -- the mod this came from.
+  -- Gen 1 records nothing about what caught a Pokemon -- the party struct
+  -- has no ball in it, in the engine or in the ROM it recompiles -- and the
+  -- Pokemon Center feature this was ported alongside needed a field the mod
+  -- invented and left in the player's save forever.  It is not here, and
+  -- this is the check that it stays not here: the ball is asked for in the
+  -- moment it is in flight, which is the only moment the engine knows it,
+  -- and nothing is subscribed to and nothing is stored.
   do
     local mon = {}
     Runtime.emit("pokemon.caught", { mon = mon, ball = "GREAT_BALL" })
-    T.eq(mon.caughtBall, "GREAT_BALL", "a catch records the ball that made it")
-    Runtime.emit("pokemon.caught", { mon = mon, ball = "POKE_BALL" })
-    T.eq(mon.caughtBall, "GREAT_BALL",
-         "and a field already written is never written over")
-  end
-
-  -- ------- the Pokemon Center
-  --
-  -- The machine is wrapped, and the wrap is inert on every frame that is
-  -- not a heal: no healAnim, no shim, and drawWorld is the engine's own.
-  T.check(type(OverworldState._g1bOriginals) == "table"
-          and type(OverworldState._g1bOriginals.drawWorld) == "function",
-          "the Pokemon Center's draw is wrapped, with the original kept")
-  do
-    local world = { healAnim = nil }
-    local reached = false
-    OverworldState._g1bOriginals.drawWorld = function() reached = true end
-    local vanillaDraw = love.graphics.draw
-    OverworldState.drawWorld(world)
-    T.check(reached, "a map with no heal running still draws")
-    T.eq(love.graphics.draw, vanillaDraw,
-         "and love.graphics.draw is left alone on every frame but a heal's")
+    local wrote = next(mon)
+    T.eq(wrote, nil, "a catch leaves no field of this mod's on the Pokemon")
+    T.check(package.loaded["src.world.OverworldController"] == nil
+            or type(require("src.world.OverworldController")._g1bOriginals)
+               ~= "table",
+            "and the overworld's own draw is not wrapped by this mod at all")
   end
 end
 

@@ -3,8 +3,8 @@
 ## Pokeball Colors
 
 The ball colouring in `pokeballs.lua` — the colours themselves, the
-`BAND_TILES` pixel-role table behind the seam band, and both draw seams it
-is installed through — is a port of **[Pokeball
+`BAND_TILES` pixel-role table behind the seam band, and the draw seam it is
+installed through — is a port of **[Pokeball
 Colors](https://github.com/mistermiracle3036/Pokeball-Colors)** by Mister
 Miracle, cut down to the five balls Red, Blue and Yellow ship with. It is
 used here under its MIT licence, reproduced in full:

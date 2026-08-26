@@ -39,11 +39,12 @@
 --
 -- The one thing here that is not a hook is the ball colouring, because there
 -- is no hook to ask for it: the colour of an animation sprite is decided
--- inside BattleState:animSpriteColors, and the heal machine's balls are drawn
--- from a closure inside OverworldState:drawWorld.  Those two are wrapped
--- directly, under the engine_internals permission the manifest declares, and
--- both wraps call the original and hand its answer back untouched for
--- everything that is not a ball.  See pokeballs.lua.
+-- inside BattleState:animSpriteColors.  That one is wrapped directly, under
+-- the engine_internals permission the manifest declares, and the wrap calls
+-- the original and hands its answer back untouched for every sprite that is
+-- not a ball.  It writes nothing to the save and subscribes to nothing: which
+-- ball is in flight is a thing the engine already knows for as long as it is
+-- in flight.  See pokeballs.lua.
 --
 -- What this file does not do is swallow a LOAD-time failure.  Nothing is at
 -- risk while the game boots -- a mod that cannot draw leaves vanilla battles
@@ -148,11 +149,6 @@ return function(mod)
     -- to have a third region to paint.  Off is the two-tone ball on the
     -- game's own tiles, which is what the ball looked like before it.
     { key = "ball_band", type = "toggle", label = "BALL BAND",
-      default = true },
-    -- The Pokemon Center heal machine, lighting each ball in the colours of
-    -- the ball that Pokemon was caught in.  Off is the machine's own one
-    -- palette for all six.
-    { key = "center_balls", type = "toggle", label = "CENTER BALLS",
       default = true },
   })
 
@@ -310,10 +306,9 @@ return function(mod)
   -- ------- the balls, in their own colours
   --
   -- Not a hook: there is none to ask for.  The colour of an animation sprite
-  -- is decided inside BattleState:animSpriteColors and the heal machine's
-  -- balls are drawn from a closure inside OverworldState:drawWorld, so this
-  -- is the one part of the mod that wraps engine functions directly, under
-  -- the engine_internals permission the manifest already declares.  See
+  -- is decided inside BattleState:animSpriteColors, so this is the one part
+  -- of the mod that wraps an engine function directly, under the
+  -- engine_internals permission the manifest already declares.  See
   -- pokeballs.lua.
   --
   -- A failure here is a warning and not a raise, unlike the four loads above.
@@ -346,9 +341,8 @@ return function(mod)
   mod.exports.panelRect = Grid.panelRect
   mod.exports.expPixels = XP.pixels
   -- The ball colours, by item id, so "which mod coloured this ball" is
-  -- answerable without an experiment.  Read freely; this mod writes
-  -- mon.caughtBall at catch time and never overwrites a value already there,
-  -- which is the rule Pokeball Colors set for that field and the reason the
-  -- two can share a save.
+  -- answerable without an experiment.  Read-only as far as anything outside
+  -- this mod is concerned, and the only thing the ball colouring publishes:
+  -- it owns no field on a Pokemon and none in the save.
   mod.exports.ballColors = Balls.colors
 end

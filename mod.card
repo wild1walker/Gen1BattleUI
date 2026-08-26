@@ -4,9 +4,8 @@ return {
     .. "grid instead of a list, drawn in the Game Boy's own text boxes and "
     .. "inside the Game Boy's own screen. Dialogue still takes the bottom "
     .. "of the screen back for as long as it is talking. Under ADVANCED "
-    .. "colours, the ball you throw is coloured as itself, and the Pokemon "
-    .. "Center lights each ball in the colours of the ball that Pokemon was "
-    .. "caught in.",
+    .. "colours, the ball you throw is coloured as itself, with no field "
+    .. "written to your save to do it.",
   author = "wild1walker",
   tags = { "ui", "battle", "menu", "buttons", "moves", "colour", "xp",
     "pokeball" },
@@ -25,8 +24,8 @@ return {
       .. "colours, seam-band re-indexing table and two draw seams the ball "
       .. "colouring here is a port of -- cut to the five balls Red, Blue "
       .. "and Yellow ship with, with its registries for other mods' balls, "
-      .. "its Gold heal machine and its mart dev toggle left over there.  "
-      .. "This mod stands down whole when that one is installed" },
+      .. "its heal machines and its mart dev toggle left over there.  This "
+      .. "mod stands down whole when that one is installed" },
     { who = "Douglas Vautour", for_ = "Plain Pixel (CC-BY 4.0), the face "
       .. "Gen1Recomp bundles for its translation mode and this mod borrows "
       .. "for move names that will not fit the tile font" },
@@ -64,8 +63,7 @@ return {
       "LEVEL-UP BOX in the mod manager, on by default; off is the engine's two screens",
       "the ball you throw is coloured as itself under COLORS = ADVANCED -- the toss, the wobbles and the ball resting through the caught text -- for the five balls Red, Blue and Yellow ship with, through one wrap of BattleState:animSpriteColors, the funnel drawAnimLayer builds its colour function from; every sprite that is not a ball comes back with the engine's own answer",
       "a black band along the thrown ball's seam, which a two-tone sprite has no third region for: vanilla's rOBP0 map collapses two of the three DMG indices onto one shade and the band's pixels are body pixels, so the band comes with re-indexed art -- the seam onto index 3, the outline ring onto 2 -- rebuilt at runtime from the player's OWN extracted sheet, because that art is ROM-derived and ships with nobody",
-      "the Pokemon Center heal machine lights each ball in the colours of the ball that Pokemon was caught in, which the engine records nowhere -- so mon.caughtBall is written at catch time, into an empty field only and never over one, which is the rule that lets it share a save with Pokeball Colors",
-      "BALL COLOUR, BALL BAND and CENTER BALLS in the mod manager, all on by default, and all inactive outside ADVANCED: the mono modes have no per-sprite colour to give and their nil is passed straight through",
+      "BALL COLOUR and BALL BAND in the mod manager, both on by default, and both inactive outside ADVANCED: the mono modes have no per-sprite colour to give and their nil is passed straight through",
       "the mod's geometry on mod.exports, in tile coordinates, so a mod that wants to sit beside these buttons can find out where they are, and panelRect(battle) in game pixels for anything that draws after this mod and must not be drawn over",
     },
     known = {
@@ -85,7 +83,8 @@ return {
       "the first ball thrown in a session has no band: the re-indexed sheet is only safe to serve once this mod's palette has been seen to reach a ball, because anything that blits it raw draws a grey ball with a black stripe -- which is what a sprite pack shipping its own pre-coloured ball art and suppressing the palette pass does, and when that contradiction turns up the band switches off for the session and the other mod's artwork shows through",
       "a ball from another mod keeps its vanilla colours and says so once in the log naming it; this covers the five native balls, Pokeball Colors is the mod that covers the rest, and installing that one stands this whole feature down rather than having two mods wrap one funnel",
       "the ULTRA BALL looks like it turns over during the toss, which is the Master/Ultra palette flicker on the hardware in the ball's own colours, and it stops at the wobbles because SHAKE_ANIM never flickers",
-      "Pokemon caught before this version installed heal as a POKE BALL, because nothing was recording what caught them; it corrects itself as the party turns over",
+      "the Pokemon Center heal machine is deliberately NOT coloured, which is the one piece of Pokeball Colors left behind rather than scoped out: Gen 1 records nothing about what caught a Pokemon -- no ball anywhere in the party struct, in the engine or in the ROM it recompiles, with caught data arriving in Gen 2 and a real ball field in Gen 3 -- so the machine could only be told by a field this mod invents and leaves in the player's save forever, and a battle UI mod should be removable. The battle needs none of it: the engine knows which ball is in flight while it is in flight",
+      "nothing is subscribed to and nothing is stored: this mod owns no field on a Pokemon and adds no byte to a save, which is asserted by the suite rather than claimed",
       "a throw while drawing costs a frame's buttons and is logged; a LOAD-time failure is not swallowed, and marks the row enabled-but-broken in MODS with the reason, because an enabled mod that silently changes nothing looks exactly like one that was never installed",
     },
   },
