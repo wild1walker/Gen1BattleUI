@@ -1,5 +1,40 @@
 # Changelog
 
+## 1.5.2
+
+- **The level-up stat box came up over a blank text box again when Gen1WildQOL's
+  `EXP SHARE` was on.** Reported from device with a screenshot: the exact
+  picture 1.4.0 was written to fix, back for anyone running both mods.
+- **It was a hook priority, not the retiming.** `Hooks` sorts a chain
+  highest-first and runs the first link *outermost*
+  (`src/mods/Hooks.lua:26`), and an unprioritised link is `priority or 0`.
+  Gen1WildQOL's EXP SHARE wraps `battle.exp_award` at **priority 90** and, in
+  every mode except `OFF`, awards the exp itself and returns **without calling
+  `nextFn`** — so this mod's link sat inside it and never ran at all. The rows
+  were queued exactly as vanilla queues them and never re-marked, which is the
+  engine's own two screens: the line prompts, clears, and the stat box arrives
+  over an empty box.
+- **This link is now outermost (priority 5000).** It calls `next()` and then
+  *reads* what the chain queued, so it has to be the link the chain starts at
+  — an inner link cannot read a queue built by an outer one that never called
+  through. It costs the other mod nothing: `next(ctx)` is still what awards the
+  exp, theirs when they are the ones doing it, and its result is handed
+  straight back. Their award goes through the engine's own `ctx.applyShare`, so
+  the rows are the same rows and the retiming finds them.
+- **And it no longer fails silently.** A miss now logs how many level-up lines
+  were joined, how many were expected, and the exact text it could not match —
+  because "reached and found nothing" and "never reached at all" produced the
+  same blank box, and neither said so.
+- The suite gained the case that was missing: a link above this mod's that
+  queues the award's own rows and never calls on, asserted to still come out as
+  one screen. It fails without the priority. Modelled on how that mod behaves
+  rather than named after it, so any other mod that owns the award the same way
+  is the same test.
+- **The suite's award helper was also circular** and is fixed: it hand-built
+  the queue as two literal rows instead of letting the engine build it, so it
+  was checking this mod against its own assumption rather than against
+  `sayNextWaitSfx`/`uiNext`.
+
 ## 1.5.1
 
 Drops `gen1_wild_ui` from `optional_dependencies`. It could never be

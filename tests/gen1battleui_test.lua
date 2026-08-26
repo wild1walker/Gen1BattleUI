@@ -49,6 +49,23 @@ do
   T.eq(chain[1], ours, "so it sorts outermost in the chain")
 end
 
+-- battle.exp_award's priority means the opposite of the overlay's: this link
+-- calls next() and then READS the queue the chain built, so it has to be the
+-- link the chain STARTS at.  An inner link cannot read a queue built by an
+-- outer one that never called through -- which is exactly what Gen1WildQOL's
+-- EXP SHARE does at priority 90 in every mode but OFF.
+do
+  local chain = Runtime.hooks.chains["battle.exp_award"]
+  local ours
+  for _, entry in ipairs(chain) do
+    if entry.owner == "Gen1BattleUI" then ours = entry end
+  end
+  T.check(ours ~= nil, "the exp award link is ours to find")
+  T.check(ours and ours.priority > 90,
+          "and outranks an EXP mod that replaces the award without calling on")
+  T.eq(chain[1], ours, "so the chain starts here and the queue is readable")
+end
+
 -- Exports are published by the loader under the mod's id once its entry
 -- chunk returns; the mod RECORD is a different object and never carries them.
 local exports = run.loader.exports["Gen1BattleUI"]
@@ -1056,22 +1073,30 @@ do
     return battle
   end
 
-  -- The two rows BattleState:awardExp queues per level gained -- the line
-  -- carrying the level-up jingle, then the stat box (BattleState.lua:4448-
-  -- 4459) -- put up through the award hook, with the announcement the engine
-  -- emits before them.
+  -- What BattleState:awardExp queues per level gained, through the ENGINE'S
+  -- OWN inserters rather than as a hand-built table: the line carrying the
+  -- level-up jingle, the stat box, and -- for the player's own active mon,
+  -- which is the common case -- the HP drain that follows it.
+  --
+  -- Hand-building those rows is what this helper used to do, and it made
+  -- every claim below circular: it asserted this mod against this mod's
+  -- own idea of a queue row instead of against sayNextWaitSfx and uiNext.
+  -- The row shapes are the engine's to change, and if they change this
+  -- should fail rather than keep passing against a copy of the old ones.
+  local AWARD_ROWS = 3
   local function award(battle, text)
     local rang, box = { count = 0 }, {}
     Runtime.call("battle.exp_award", function(ctx)
       Runtime.emit("battle.exp_gained", { battle = ctx.battle, mon = MON,
                                           gained = 40, levels = { 6 } })
-      ctx.battle.queue = {
-        { text = text, waitForLearningSfx = function()
-            rang.count = rang.count + 1
-            return { isPlaying = function() return false end }
-          end },
-        { ui = function() box.pushed = true return box end },
-      }
+      ctx.battle.queue = {}
+      ctx.battle.nextInsert = 0
+      ctx.battle:sayNextWaitSfx(text, function()
+        rang.count = rang.count + 1
+        return { isPlaying = function() return false end }
+      end)
+      ctx.battle:uiNext(function() box.pushed = true return box end)
+      ctx.battle:drainNext()
     end, { battle = battle, participants = 1, alive = { MON } })
     return rang, box
   end
@@ -1100,8 +1125,8 @@ do
   do
     local battle = queueBattle()
     local rang, box = award(battle, GREW)
-    T.eq(#battle.queue, 2,
-         "nothing is inserted: the award's own two rows are the two rows left")
+    T.eq(#battle.queue, AWARD_ROWS,
+         "nothing is inserted: the award's own rows are the rows left")
     T.check(battle.queue[1].auto,
             "the level-up line is re-marked text_end, so it never prompts")
     T.eq(battle.queue[1].waitForLearningSfx, nil,
@@ -1157,6 +1182,54 @@ do
     drive(battle, 900)
     T.check(boxes[1].pushed, "the first box comes up on its own")
     T.eq(#(battle.shown or {}), 2, "over the first line, still in the window")
+  end
+
+  -- ------- an EXP mod that awards the exp itself
+  --
+  -- The bug this test exists for.  Gen1WildQOL's EXP SHARE wraps
+  -- battle.exp_award at priority 90 and, in every mode except OFF, awards
+  -- through ctx.applyShare and returns WITHOUT calling nextFn.  Hooks runs
+  -- the highest priority outermost, so an unprioritised link (`priority or
+  -- 0`) sat inside it and never ran: the rows were queued exactly as vanilla
+  -- queues them and never re-marked, and the player got the stat box over an
+  -- empty text box -- the very picture this feature was written to fix.
+  --
+  -- Modelled as that mod behaves rather than named after it: a link above
+  -- this mod's that queues the award's own rows and never calls on.  Any
+  -- other mod that owns the award the same way is the same test.
+  do
+    local battle = queueBattle()
+    local box, rang = {}, { count = 0 }
+    local calledOn = false
+    local release = Runtime.hooks:wrap("battle.exp_award", function(nextFn, ctx)
+      calledOn = true
+      -- their award, through the engine's own applyShare -- which is what
+      -- puts the vanilla rows in the queue and emits battle.exp_gained
+      Runtime.emit("battle.exp_gained", { battle = ctx.battle, mon = MON,
+                                          gained = 40, levels = { 6 } })
+      ctx.battle.queue = {
+        { text = GREW, waitForLearningSfx = function()
+            rang.count = rang.count + 1
+            return { isPlaying = function() return false end }
+          end },
+        { ui = function() box.pushed = true return box end },
+      }
+      -- and deliberately no nextFn(ctx): they own the award
+    end, 90, "FakeExpShareMod")
+
+    Runtime.call("battle.exp_award", function() end,
+                 { battle = battle, participants = 1, alive = { MON } })
+    release()
+
+    T.check(calledOn, "the EXP mod's own award really did run")
+    T.check(battle.queue[1].auto,
+            "and this mod still re-marked the line it never queued")
+
+    drive(battle, 600)
+    T.check(box.pushed, "the stat box comes up with no press in between")
+    T.check(battle.msgHold, "with the line held on screen under it")
+    T.check(#glyphs(battle) > 0,
+            "so an EXP SHARE level-up is NOT the blank box that was reported")
   end
 
   -- A message row carrying a sound in front of a UI row is not by itself a

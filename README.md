@@ -370,6 +370,15 @@ funnel and arguing about it.
   it now rides in with parks the queue itself until you dismiss it, which is
   the clear window that wait was there to give it. Mash through the box fast
   enough and the next line can start over the tail of the jingle.
+- **A mod that awards the EXP itself has to let this mod read the queue.**
+  This mod's `battle.exp_award` link runs *outermost* (priority 5000) because
+  it calls `next()` and then reads the rows the chain queued. Gen1WildQOL's
+  `EXP SHARE` wraps the same hook at priority 90 and, in every mode but `OFF`,
+  awards the exp and returns without calling on — which used to leave this
+  mod's link unreached and the stat box back over a blank text box. Fixed in
+  1.5.1 by being the outermost link; a mod that sits outside *this* one and
+  never calls through would put it back, and the log now says so when it
+  happens.
 - **A `RARE CANDY` outside a battle is unchanged.** That level-up is the
   party menu's, printed through the map's own text box, and this is a battle
   mod.

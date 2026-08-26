@@ -69,6 +69,7 @@ return {
       "the mod's geometry on mod.exports, in tile coordinates, so a mod that wants to sit beside these buttons can find out where they are, and panelRect(battle) in game pixels for anything that draws after this mod and must not be drawn over",
     },
     known = {
+      "this mod's battle.exp_award link runs OUTERMOST (priority 5000) because it calls next() and then READS the rows the chain queued -- an inner link cannot read a queue built by an outer one that never called through, which is what Gen1WildQOL's EXP SHARE does at priority 90 in every mode but OFF, and is why the level-up stat box came back over a blank text box for anyone running both (fixed 1.5.1)",
       "the level-up jingle loses WaitForSoundToFinish, because the stat box it now rides in with parks the queue on waitingUI until it is dismissed, which is the clear window that wait was there to give it; mash through the box fast enough and the next line starts over its tail",
       "the level-up rows are named by their TEXT, built through the same Strings call the engine builds them with from the levels battle.exp_gained announces, because \"a message carrying a sound in front of a UI row\" is also \"X learned MOVE!\" in front of the forget menu; a wording change upstream is a level-up that keeps the engine's two screens rather than a learned-move line that loses its prompt",
       "a RARE CANDY outside a battle is unchanged: that level-up is the party menu's, printed through the map's own text box rather than the battle's queue",
