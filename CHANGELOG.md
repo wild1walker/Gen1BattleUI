@@ -18,12 +18,18 @@
   that does.** Gen 1 records nothing about what caught a Pokémon — not in the
   engine, and not in the ROM it recompiles, whose party struct is species, HP,
   status, types, catch rate, moves, OT, exp, stat exp, DVs, PP and level with
-  no ball anywhere in it; caught data arrives with Gen 2 and a real ball field
-  with Gen 3. So the machine can only be told by a field the mod invents.
+  no ball anywhere in it. Nor does Gen 2 — Crystal's caught data is time,
+  level, location and OT gender — and Gen 3 is the first generation to record
+  the ball at all, as four bits in the Misc substruct's origins halfword. So
+  the machine can only be told by a field the mod invents.
   `mon.caughtBall` goes onto the Pokémon, and a Pokémon *is* `save.party[i]` —
   `SaveSerializer` writes every key it finds — so it lands in the save beside
   `species` and `dvs` and stays there after an uninstall. One string per
-  Pokémon caught.
+  Pokémon caught. It is a Lua key on a mon table, which is this engine's idiom
+  for every other field too, but it maps to no byte in the real Gen 1 format:
+  `GenSave.encodeMon` writes fixed offsets from a known field list, so an
+  export to a 32768-byte `.sav` drops it and a round trip lights every ball
+  red until the party turns over.
 - **The namespaced alternative was considered and turned down.** `mod.save`,
   backed by `save.modData["Gen1BattleUI"]`, would vanish cleanly with the mod
   — but a side table needs a key, and a Gen 1 Pokémon has no unique id. The

@@ -66,9 +66,22 @@
 -- Gen 1 records nothing about what caught a Pokemon.  Not in the engine
 -- -- Pokemon.new builds species, level, exp, dvs, statExp, stats, hp,
 -- catchRate, status and moves -- and not in the ROM it recompiles, whose
--- party struct has no ball anywhere in it.  Caught data arrives with
--- Gen 2 and a real per-Pokemon ball field with Gen 3.  So this feature
--- cannot be free: it exists only because a field is invented.
+-- party struct has no ball anywhere in it.  Nor does Gen 2: the caught
+-- data Crystal adds is time, level, location and OT gender, which is
+-- exactly what this engine's own Gen 2 mon carries (Breeding.lua,
+-- Evolution.lua).  GEN 3 is the first generation to record the ball at
+-- all, as four bits in the Misc substruct's origins halfword.  So this
+-- feature cannot be free: it exists only because a field is invented.
+--
+-- And it is invented in this engine's idiom, not the ROM's.  A Lua key
+-- on a mon table is how species, otId, nickname and traded are all
+-- stored here, so it is the right shape for this codebase -- but it
+-- corresponds to no byte in the real save format, and
+-- GenSave.encodeMon writes fixed offsets from a known field list.  On
+-- export to a 32768-byte .sav the field is not written, because there
+-- is nowhere to write it.  Convert out and back and the machine lights
+-- every ball red until the party turns over.  Cosmetic, and the only
+-- honest place for it to fail.
 --
 -- `mon.caughtBall` goes onto the mon table, which IS save.party[i], and
 -- SaveSerializer.encode is a generic pairs() recursion that writes every

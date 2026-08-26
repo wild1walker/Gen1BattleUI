@@ -262,8 +262,12 @@ same. Now each one is the ball that Pokémon was **caught** in — a party of
 **Gen 1 records nothing about what caught a Pokémon** — not in the engine, and
 not in the ROM it recompiles, whose party structure is species, HP, status,
 types, catch rate, moves, OT, exp, stat exp, DVs, PP and level with no ball
-anywhere in it. Caught data arrives with Gen 2; a real per-Pokémon ball field
-with Gen 3. So this feature is not free, and here is exactly what it costs:
+anywhere in it. Nor does Gen 2: the caught data Crystal adds is time, level,
+location and OT gender, and this engine's own Gen 2 mon carries exactly those
+four. **Gen 3 is the first generation to record the ball at all** — four bits
+inside the origins halfword of the Misc substruct, holding the ball's item
+index. So this feature is not free in Gen 1, and here is exactly what it
+costs:
 
 **It writes one field into your save.** `mon.caughtBall` goes onto the
 Pokémon, and a Pokémon *is* `save.party[i]` — `SaveSerializer` is a generic
@@ -388,6 +392,13 @@ funnel and arguing about it.
 - **Pokémon caught before this installed heal as `POKE BALL`,** because there
   was nothing recording what caught them. It corrects itself as the party
   turns over.
+- **The caught ball does not survive an export to a real `.sav`.** It is not
+  how the games flag anything: `mon.caughtBall` is a Lua key on a mon table,
+  which is how this engine stores every other field too, but the real Gen 1
+  format has no byte for it. `GenSave.encodeMon` writes fixed offsets from a
+  known field list, so on export the field is simply not written — convert out
+  and back and the machine lights every ball red again, until the party turns
+  over. Nothing else about the Pokémon is affected.
 - **The Center feature writes to your save, and it is the only thing here that
   does.** One field, `mon.caughtBall`, on each Pokémon you catch, in the save
   file beside the vanilla party data — and still there if you uninstall the
