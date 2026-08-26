@@ -196,6 +196,27 @@ second, so the panel covers it the way it covers anything else beneath it, and
 a panel that changes width takes the covering with it. **`XP BAR`** turns it
 off.
 
+### The level-up box comes up over the line, not after it
+
+Level up in a battle and the engine prints `IVYSAUR grew to level 28!`, waits
+for a press, **clears it**, and only then opens the `ATTACK`/`DEFENSE`/`SPEED`
+/`SPECIAL` window — over an empty text box, with nothing left on screen saying
+what those numbers belong to. Two screens and two presses.
+
+The ROM prints one. `GrewLevelText` ends in `text_end` rather than `prompt`,
+so `PrintText` returns without ever blinking the arrow, and `PrintStatsBox`
+draws its window into the screen that line is *still on*; the button press
+that follows dismisses the pair together.
+
+So the line is re-marked as what the ROM makes it — the engine's own `auto`
+row kind, the one the used-move line rides through its animation, which leaves
+the typed page drawn under whatever runs next — and the level-up jingle moves
+onto the stat box, which is the beat `sound_level_up` lands on anyway. Nothing
+is queued and nothing is inserted: the two rows the engine already made come
+back with two flags moved between them, so everything queued after them stays
+exactly where it was. **`LEVEL-UP BOX`** turns it off and gives the engine's
+two screens back.
+
 ---
 
 ## Options
@@ -205,6 +226,7 @@ off.
 | `MOVE PANEL` | on | The name, type and PP of the highlighted move, above the grid, where the vanilla `TYPE/PP` box stood. Off gives the picture behind it back — and, on the wide layout, gives its tiles to the grid, because a strip that stops short of the screen edge is a hole in the frame rather than a saving. |
 | `XP BAR` | on | A Gen 2 style experience bar under your Pokémon, filling towards the next level, with Gen 2's fill-hold-burst-refill on a level up. Drawn before the move panel, so the panel covers it rather than the other way round. |
 | `TYPE COLOUR` | on | The type in the panel and each move name on its button, in that type's own colour, drawn through a shader that inks the game's own glyphs. Off is plain black text. |
+| `LEVEL-UP BOX` | on | The level-up stat window over the `grew to level` line rather than after it, dismissed together, the way `text_end` + `PrintStatsBox` prints it in the ROM. Off is the engine's two screens, with the text box under the window blank. |
 | `FULL NAMES` | off | Move names in the engine's Plain Pixel when they will not fit the tile font, so they print whole in the buttons too. Off — the default — is the game's own font always, cut to the cell, and the panel above is what reads the whole name. |
 
 ---
@@ -218,7 +240,10 @@ off.
   every callback is still the engine's, so anything wrong with what the battle
   menu *does* is not this mod.
 - **Dialogue, and everything above it.** The text box, its scroll, its
-  wait arrow, and every screen pushed over the battle.
+  wait arrow, and every screen pushed over the battle — with the one
+  deliberate exception of the level-up line, which is re-marked as the
+  ROM's own `text_end` page so its stat box can come up over it rather
+  than after it.
 - **The HP panels, the pictures, the animations.** The whole top of the
   screen is untouched.
 
@@ -241,6 +266,13 @@ off.
   white and are not recoloured by a `COLORS` zone the way the vanilla strip's
   border is. On the default look this is the same picture; under a mode that
   tints the text box it is not.
+- **The level-up jingle loses `WaitForSoundToFinish`,** because the stat box
+  it now rides in with parks the queue itself until you dismiss it, which is
+  the clear window that wait was there to give it. Mash through the box fast
+  enough and the next line can start over the tail of the jingle.
+- **A `RARE CANDY` outside a battle is unchanged.** That level-up is the
+  party menu's, printed through the map's own text box, and this is a battle
+  mod.
 - **A throw while drawing costs a frame's buttons, not the battle.** The draw
   is wrapped and logged; a load-time failure is *not* swallowed, and marks the
   row enabled-but-broken in `MODS` with the reason, because an enabled mod
@@ -260,8 +292,9 @@ wild1walker/Gen1Wild
 ## Credits
 
 - **Gen1Recomp** — the battle hooks this is built on: `battle.overlay`,
-  `battle.bottom_ui_visible` and `battle.move_grid_navigation` were already
-  there, and this mod is what happens when a mod uses all three.
+  `battle.bottom_ui_visible`, `battle.move_grid_navigation` and
+  `battle.exp_award` were already there, and this mod is what happens when a
+  mod uses all four.
 - **pret/pokered** — `engine/battle/core.asm`, whose `DisplayBattleMenu` and
   `MoveSelectionMenu` are the two screens this re-dresses, and whose 2×2
   reading of `menuIndex` is why the command menu needed no new input handling.

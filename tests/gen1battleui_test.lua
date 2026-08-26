@@ -1006,6 +1006,172 @@ do
           "the bar shows on the command menu too")
 end
 
+-- ------- the level-up line and its stat box are one screen
+--
+-- Reported as "the stat pop-up shows with the chat box blank".  It does: the
+-- engine queues the level-up line as a prompt row and the stat box as the UI
+-- row behind it, so the line is dismissed and CLEARED before the box is
+-- pushed, and the box comes up over a text box with nothing in it.  pokered
+-- prints one screen -- GrewLevelText ends in text_end, not prompt, and
+-- PrintStatsBox draws into the screen the line is still on
+-- (engine/battle/experience.asm:369-372) -- and one A takes both away.
+--
+-- So the claim is not about anything this mod draws.  It is about what the
+-- ENGINE'S OWN queue does with the two rows afterwards, and it is checked by
+-- running them: BattleState:updateQueue over a battle carrying the fields it
+-- touches, then BattleState:drawTextArea to see whether the box under the
+-- stat window has glyphs in it.  Both cases are driven, because "the message
+-- is still there" only means anything beside the picture it replaces.
+
+do
+  local Strings = require("src.core.Strings")
+  local BattleState = require("src.battle.BattleState")
+
+  T.check((Runtime.hooks.chains or {})["battle.exp_award"] ~= nil,
+          "the exp award hook is attached")
+  T.check((Runtime.events.listeners or {})["battle.exp_gained"] ~= nil,
+          "and the level announcement is listened for")
+
+  local NAME = MON.nickname or Data.pokemon[MON.species].name
+  local GREW = Strings("%s grew\nto level %d!", NAME, 6)
+
+  -- The fake battle borrows the real class rather than reimplementing it:
+  -- updateQueue calls startMessage and beginMsgLine on the way through, and
+  -- a stub of those would be a stub of the very thing being asserted.
+  local function queueBattle()
+    local battle = setmetatable(fakeBattle({ phase = "messages", mon = MON }),
+                                { __index = BattleState })
+    battle.queue = {}
+    local tapped
+    battle.game.input = {
+      wasPressed = function(_, key) return tapped == key end,
+      isDown = function() return false end,
+    }
+    battle.game.save = { options = { textSpeed = 1 } }
+    battle.bottomUIVisible = function() return true end
+    function battle.game.stack:push(state)
+      self.states[#self.states + 1] = state
+    end
+    battle.tap = function(key) tapped = key end
+    return battle
+  end
+
+  -- The two rows BattleState:awardExp queues per level gained -- the line
+  -- carrying the level-up jingle, then the stat box (BattleState.lua:4448-
+  -- 4459) -- put up through the award hook, with the announcement the engine
+  -- emits before them.
+  local function award(battle, text)
+    local rang, box = { count = 0 }, {}
+    Runtime.call("battle.exp_award", function(ctx)
+      Runtime.emit("battle.exp_gained", { battle = ctx.battle, mon = MON,
+                                          gained = 40, levels = { 6 } })
+      ctx.battle.queue = {
+        { text = text, waitForLearningSfx = function()
+            rang.count = rang.count + 1
+            return { isPlaying = function() return false end }
+          end },
+        { ui = function() box.pushed = true return box end },
+      }
+    end, { battle = battle, participants = 1, alive = { MON } })
+    return rang, box
+  end
+
+  local function drive(battle, frames)
+    for _ = 1, frames do
+      if battle.game.stack:top() ~= battle then break end
+      BattleState.updateQueue(battle)
+    end
+  end
+
+  -- what the bottom box actually has in it this frame
+  local function glyphs(battle)
+    local out = {}
+    local realCode, realBox = Font.drawCode, Font.drawBox
+    Font.drawCode = function(code, x, y)
+      out[#out + 1] = { code = code, x = x, y = y }
+    end
+    Font.drawBox = function() end
+    local ok, err = pcall(BattleState.drawTextArea, battle)
+    Font.drawCode, Font.drawBox = realCode, realBox
+    T.check(ok, "the engine draws its text area (" .. tostring(err) .. ")")
+    return out
+  end
+
+  do
+    local battle = queueBattle()
+    local rang, box = award(battle, GREW)
+    T.eq(#battle.queue, 2,
+         "nothing is inserted: the award's own two rows are the two rows left")
+    T.check(battle.queue[1].auto,
+            "the level-up line is re-marked text_end, so it never prompts")
+    T.eq(battle.queue[1].waitForLearningSfx, nil,
+         "and hands its jingle to the box, which the auto path would not ask")
+
+    drive(battle, 600)
+    T.check(box.pushed, "the stat box comes up with no button press in between")
+    T.eq(rang.count, 1, "the jingle sounded once, as it opened")
+    T.check(battle.msgHold, "and the line is held on screen under it")
+    T.eq(battle.current, nil, "the queue really has moved past the line")
+    T.eq(#(battle.shown or {}), 2, "both its rows are still in the window")
+    T.check(#glyphs(battle) > 0, "so the box under the stat window is NOT blank")
+  end
+
+  -- The picture that was reported, which is what the engine does on its own.
+  do
+    run.loader.modOptions["Gen1BattleUI"] = { levelup_box = false }
+    local battle = queueBattle()
+    local _, box = award(battle, GREW)
+    T.eq(battle.queue[1].auto, nil, "LEVEL-UP BOX off leaves both screens alone")
+
+    drive(battle, 600)
+    T.check(not box.pushed, "the stat box waits behind the line's own prompt")
+    battle.tap("a")
+    drive(battle, 600)
+    T.check(box.pushed, "one press later it is up")
+    T.eq(battle.msgHold, nil, "with the line cleared out from under it")
+    T.eq(#glyphs(battle), 0, "which is the blank box this was reported as")
+    run.loader.modOptions["Gen1BattleUI"] = nil
+  end
+
+  -- Two levels in one award is two pairs, and the lines are counted rather
+  -- than flagged so both are joined -- including the EXP.ALL case, where two
+  -- mons of the same name can reach the same level in the same award.
+  do
+    local battle = queueBattle()
+    local boxes = { {}, {} }
+    Runtime.call("battle.exp_award", function(ctx)
+      Runtime.emit("battle.exp_gained", { battle = ctx.battle, mon = MON,
+                                          gained = 400, levels = { 6, 7 } })
+      ctx.battle.queue = {}
+      for i, level in ipairs({ 6, 7 }) do
+        local box = boxes[i]
+        table.insert(ctx.battle.queue,
+          { text = Strings("%s grew\nto level %d!", NAME, level) })
+        table.insert(ctx.battle.queue,
+          { ui = function() box.pushed = true return box end })
+      end
+    end, { battle = battle, participants = 1, alive = { MON } })
+
+    T.check(battle.queue[1].auto and battle.queue[3].auto,
+            "both of a two-level award's lines are joined to their own box")
+    drive(battle, 900)
+    T.check(boxes[1].pushed, "the first box comes up on its own")
+    T.eq(#(battle.shown or {}), 2, "over the first line, still in the window")
+  end
+
+  -- A message row carrying a sound in front of a UI row is not by itself a
+  -- level-up: "X learned MOVE!" in front of the forget menu is the same
+  -- shape.  The rows are named by their text, so that one keeps its prompt.
+  do
+    local battle = queueBattle()
+    local rang, box = award(battle, Strings("%s learned\n%s!", NAME, "CUT"))
+    T.eq(battle.queue[1].auto, nil, "a line that is not a level-up keeps its prompt")
+    drive(battle, 600)
+    T.check(not box.pushed, "and the screen behind it still waits for the button")
+    T.eq(rang.count, 1, "its own sound rings from the row, as the engine rings it")
+  end
+end
+
 -- ------- the bag's own scrolling is not this mod's
 --
 -- Reported as "the item screen sometimes scrolls a bunch".  It is the
