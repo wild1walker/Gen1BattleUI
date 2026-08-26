@@ -1,0 +1,60 @@
+name: Test
+
+# Runs the mod's own suite against a real Gen1Recomp checkout, headlessly and
+# without a ROM: tests/modkit loads this mod through the production Loader and
+# merges it into the ROM-free fixture dataset, so a green run here means the
+# mod really loads and its screens really build.
+#
+# Deliberately NOT a gate on release.yml.  A release is cut from a push to
+# main and this job depends on another repository's layout, so wiring it in
+# front of the release would mean an upstream rename could block shipping a
+# fix.  It runs beside the release instead, and a red run is a signal to yank
+# rather than a lock on the button.
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - '**.md'
+      - 'mod.card'
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout the mod
+        uses: actions/checkout@v4
+        with:
+          path: mod
+
+      - name: Checkout Gen1Recomp
+        uses: actions/checkout@v4
+        with:
+          repository: bryanthaboi/gen1recomp
+          path: engine
+          # the suite reads src/, tests/ and the fixture dataset at one commit;
+          # no history is needed and the tree is large
+          fetch-depth: 1
+
+      - name: Install LuaJIT
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y luajit
+
+      - name: Run the suite
+        run: |
+          set -euo pipefail
+          # the harness resolves a mod by name under mods/, so the checkout is
+          # placed where a real install would sit rather than pointed at
+          mkdir -p engine/mods/Gen1BattleUI
+          cp -r mod/. engine/mods/Gen1BattleUI/
+          rm -rf engine/mods/Gen1BattleUI/.git engine/mods/Gen1BattleUI/.github
+          cd engine
+          luajit mods/Gen1BattleUI/tests/gen1battleui_test.lua
