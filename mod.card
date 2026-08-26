@@ -5,7 +5,7 @@ return {
     .. "inside the Game Boy's own screen. Dialogue still takes the bottom "
     .. "of the screen back for as long as it is talking.",
   author = "wild1walker",
-  tags = { "ui", "battle", "menu", "buttons", "moves" },
+  tags = { "ui", "battle", "menu", "buttons", "moves", "colour" },
   credits = {
     { who = "Gen1Recomp", for_ = "the three battle hooks this is built on -- "
       .. "battle.overlay, battle.bottom_ui_visible and "
@@ -35,17 +35,21 @@ return {
     added = {
       "move names print whole: the tile font is 8px a glyph and a classic cell is seven of them against Gen 1's twelve-glyph names, so a move menu that will not fit is drawn in Plain Pixel -- the TTF the engine already ships for its translation mode -- at the largest size whose twelve glyphs still fit the cell",
       "a grid takes the small face for all four names or none, because GUST in one font beside THUNDERSHOCK in another reads as a rendering fault rather than a choice; a party whose names all fit is vanilla to the pixel, the command menu never moves, and the wide layout never reaches for it",
-      "FULL NAMES in the mod manager, on by default; off is the game's own font always and the cut comes back",
+      "FULL NAMES in the mod manager, OFF by default -- the panel above already reads the whole name in the game's own font, so the buttons stay the game's own font cut to the cell, which is what the 2x2 has always looked like; on prints them whole in the buttons too",
       "opening the bag leaves the buttons up and marks ITEM with a hollow hand rather than clearing them away: the item list is the one list in the game that is not a screen of its own (ListMenu's itemBox, isOpaque = false, sixteen tiles at (4,2)), so it stops at y=103 and the strip underneath it is still on screen",
       "that state is deliberately not claimed through battle.bottom_ui_visible -- a false for the battle would take the bag's own How many?, YES/NO and use message with it, since every box above a battle inherits the battle's answer -- so the engine keeps drawing its empty box and the buttons go over the top of it, into the same pixels",
-      "a panel above the move grid with the highlighted move's name, its type and its PP -- which the vanilla list never showed at once -- keeping the footprint of the vanilla TYPE/PP box at (0,8) 11x5, because the player's own HUD runs across rows 7-11 from x=72 rightwards and a wider panel covers their HP while they choose a move",
+      "a panel above the move grid with the highlighted move's name, its type and its PP -- which the vanilla list never showed at once -- standing where the vanilla TYPE/PP box stood at (0,8), fourteen tiles by five with a row each for the three: twelve interior glyphs is exactly Gen 1's longest move name, so it never cuts, and it stops 48 pixels short of the full width, clear of the player's own HP numbers",
+      "the move's type is drawn in that type's own colour in the panel, and each button's move name in its own, so the grid reads as four types at a glance and the panel says which one the cursor is on",
+      "the letters themselves are coloured rather than a field behind them: a tile glyph is black on transparent and setColor cannot reach one, so a shader throws each glyph's RGB away and keeps only its alpha -- the glyph becomes a stencil filled with the type's colour, the same tile sheet in a different ink",
+      "TYPE COLOUR in the mod manager, on by default; off is plain black text everywhere",
       "MOVE PANEL in the mod manager, which gives the picture behind it back, and on the widescreen layout gives its ten tiles to the grid rather than leaving a hole in the frame",
       "the mod's geometry on mod.exports, in tile coordinates, so a mod that wants to sit beside these buttons can find out where they are",
     },
     known = {
       "the small face is NOT the game's font, so a font mod or a skin that redraws the tile sheet does not reach it -- unlike the boxes, which are Font.drawBox and do; that is the trade FULL NAMES makes, and off is the way out of it",
       "the engine's own whole-game TTF mode is deliberately not switched on: that is a font swap for every screen in the game, and a battle mod has no business making one",
-      "seven glyphs is seven glyphs: no arrangement of two columns inside 160 pixels gives THUNDERSHOCK its full name in a cell, and the panel above buys nine of them rather than all twelve -- the vanilla box it keeps the footprint of is eleven tiles, and the pixels either side of it are the player's own HP",
+      "seven glyphs is seven glyphs: no arrangement of two columns inside 160 pixels gives THUNDERSHOCK its full name in a cell, which is what the panel above is for and what FULL NAMES is the other way out of",
+      "the colour needs a shader, which is the one thing here a host can simply not have: without love.graphics.newShader the letters are black and nothing else changes, which is the picture this mod drew before it had any colour, and a type this mod has no colour for -- a mod's own -- is left black as well",
       "THROW ROCK is ten glyphs against seven in a Safari battle and reads THROW.; the widescreen layout has the room and prints it whole",
       "the overlay draws after the palette pass, so the buttons are black on white and are not recoloured by a COLORS zone the way the vanilla strip's border is -- the same picture on the default look, and not under a mode that tints the text box",
       "nothing about what the menus DO is replaced: every index, key and callback is still the engine's, so anything wrong with what the battle menu does is not this mod",

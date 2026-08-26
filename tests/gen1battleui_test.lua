@@ -57,6 +57,20 @@ T.check(type(exports) == "table" and type(exports.geometry) == "table",
 T.eq(exports and exports.geometry and exports.geometry.classic.boxW, 10,
      "and it says how wide a classic button is")
 
+-- ------- a shader to tint with
+--
+-- The type is drawn in its own colour by a shader that throws each glyph's
+-- RGB away and keeps its alpha (chrome.lua), because a tile glyph is black
+-- on transparent and setColor cannot reach it.  love_stub carries setShader
+-- but not newShader, so without this every tinted draw would take the mod's
+-- own no-shader fallback and the colour would be untestable -- which is the
+-- one path a headless run would then never exercise.  The stub is the real
+-- contract and nothing more: newShader hands back an object, :send stores
+-- what was sent to it, and setShader is what says which one is live.
+love.graphics.newShader = love.graphics.newShader or function()
+  return { send = function(self, name, value) self[name] = value end }
+end
+
 -- ------- a stub battle
 --
 -- The fields the engine's own drawTextArea reads, and nothing else: this mod
@@ -110,10 +124,24 @@ end
 local function record(battle)
   local out = { boxes = {}, text = {}, codes = {}, rects = {} }
   local realDraw, realBox, realCode = Font.draw, Font.drawBox, Font.drawCode
+  -- Which shader is live when a glyph goes down, and what colour it was told
+  -- to stencil with: that pair IS the tint, so it is recorded onto the label
+  -- rather than kept as a separate trace nothing could line back up.
+  local realSetShader = love.graphics.setShader
+  local shader
+  love.graphics.setShader = function(s)
+    shader = s
+    return realSetShader(s)
+  end
+  local function tint()
+    local sent = shader and shader.tint
+    if not sent then return nil end
+    return { sent[1] * 255, sent[2] * 255, sent[3] * 255 }
+  end
   Font.draw = function(text, x, y)
     local ok, w = pcall(Font.width, text)
     out.text[#out.text + 1] = { text = tostring(text), x = x, y = y,
-                                w = ok and w or 0 }
+                                w = ok and w or 0, ink = tint() }
   end
   Font.drawBox = function(tx, ty, tw, th)
     out.boxes[#out.boxes + 1] = { tx = tx, ty = ty, tw = tw, th = th }
@@ -145,12 +173,17 @@ local function record(battle)
       local okw, v = pcall(face.getWidth, face, text)
       w = okw and v or 0
     end
+    -- the small face is a TTF and really is drawn in the current colour, so
+    -- its ink is setColor's and not the shader's
+    local c = colour and { colour[1] * 255, colour[2] * 255, colour[3] * 255 }
+    if c and c[1] == 0 and c[2] == 0 and c[3] == 0 then c = nil end
     out.text[#out.text + 1] = { text = tostring(text), x = x, y = y,
-                                w = w, small = true }
+                                w = w, small = true, ink = c }
   end
   local ok, err = pcall(Runtime.call, "battle.overlay", function() end, battle)
   love.graphics.print, love.graphics.setFont = realPrint, realSetFont
   love.graphics.rectangle, love.graphics.setColor = realRect, realSetColor
+  love.graphics.setShader = realSetShader
   Font.draw, Font.drawBox, Font.drawCode = realDraw, realBox, realCode
   T.check(ok, "the overlay draws (" .. tostring(err) .. ")")
   return out
@@ -728,46 +761,97 @@ do
   run.loader.modOptions["Gen1BattleUI"] = nil
 end
 
--- ------- the type sits on a chip in its own colour
+-- ------- the colour is in the letters, not behind them
 --
--- Behind the word, never in it: a tile glyph is black on transparent and
--- comes out black whatever colour is set, so tinting the letters would mean
--- giving up the game's own font for them.  The chip is exactly the glyph row
--- tall, so it cannot bleed into the line above or below.
+-- Reported as "I don't want the word highlighted I want the font color
+-- changed".  A tile glyph is black on transparent (src/render/Font.lua) and
+-- setColor cannot reach it, so the letters are stencilled by a shader that
+-- keeps the glyph's alpha and supplies the RGB itself.  What that means for
+-- a recording: the ink on a label is the tint that was live when it went
+-- down, and nothing is filled behind anything.
 
-local function chipUnder(drawn, text)
-  local label
-  for _, t in ipairs(drawn.text) do if t.text == text then label = t end end
-  if not label then return nil end
-  for _, r in ipairs(drawn.rects) do
-    if r.y == label.y and r.h == 8 and r.x == label.x then return r, label end
+local function inkOf(drawn, text)
+  for _, t in ipairs(drawn.text) do
+    if t.text == text then return t.ink, t end
   end
-  return nil, label
+  return nil, nil
+end
+
+-- A button's label is cut to its cell, so it is looked up by what survives
+-- the cut rather than by the whole name.  y >= 96 is the button strip: the
+-- panel above it starts at row 8.
+local function cellInk(drawn, prefix)
+  for _, t in ipairs(drawn.text) do
+    if t.y >= 96 and t.text:sub(1, #prefix) == prefix then return t.ink, t end
+  end
+  return nil, nil
 end
 
 do
+  -- move 1 of the fixture party is FIX EMBER, a FIRE move
   local drawn = record(fakeBattle({ phase = "moveSelect", moveIndex = 1 }))
-  local chip, label = chipUnder(drawn, "FIRE")
+  local ink, label = inkOf(drawn, "FIRE")
   T.check(label ~= nil, "the panel names the type")
-  T.check(chip ~= nil, "and puts a chip under it")
-  T.check(chip and chip.w >= label.w, "at least as wide as the word")
-  T.check(chip and chip.colour and chip.colour[1] > chip.colour[3],
-          "FIRE's chip is warmer than it is blue")
+  T.check(ink ~= nil, "and draws the word itself in colour")
+  T.check(ink and ink[1] > ink[3], "FIRE's ink is warmer than it is blue")
+  T.eq(#drawn.rects, 0, "with nothing filled in behind it")
 
-  -- a type the table does not know gets no chip, and the word is unchanged
+  -- the tint is a colour, not a clamp: bytes handed to LOVE unconverted are
+  -- all white, which is the bug this catches
+  T.check(ink and ink[1] <= 255 and ink[1] >= 1,
+          "and the tint is a real colour rather than a clamped byte")
+
+  -- ...and the same ink is on the button, which is the other half of the
+  -- ask: the move NAME is coloured in the cell, the TYPE in the panel
+  local cellTint = cellInk(drawn, "FIX EM")
+  T.check(cellTint ~= nil, "the move's own button carries the type's ink too")
+  if cellTint and ink then
+    T.eq(cellTint[1], ink[1], "the same colour in both places")
+  end
+
+  -- a NORMAL move sits beside it in its own colour, so the grid is not one
+  -- tint applied to all four
+  local normalInk = cellInk(drawn, "FIX CUT")
+  T.check(normalInk ~= nil, "a second type on the same grid is inked as well")
+  T.check(not (normalInk and ink and normalInk[1] == ink[1]
+               and normalInk[3] == ink[3]),
+          "and is not FIRE's colour")
+
+  -- a type the table does not know -- a mod's -- has no ink and is left black
   Data.moves.ODD = { name = "ODD", type = "MOD_MADE_UP", pp = 5 }
   local odd = record(fakeBattle({ phase = "moveSelect", moveIndex = 1,
     moves = { { id = "ODD", pp = 5, ppUps = 0 } } }))
-  local oddChip, oddLabel = chipUnder(odd, "MOD_MADE_UP")
-  T.check(oddLabel ~= nil or true, "an unknown type still prints")
-  T.check(oddChip == nil, "and gets no chip")
+  local oddInk, oddLabel = inkOf(odd, "MOD_MADE_UP")
+  T.check(oddLabel ~= nil, "an unknown type still prints")
+  T.check(oddInk == nil, "and is left in the game's own black")
 
-  -- TYPE COLOUR off leaves the type as plain black text
+  -- TYPE COLOUR off is plain black text everywhere
   run.loader.modOptions["Gen1BattleUI"] = { type_colour = false }
   local plain = record(fakeBattle({ phase = "moveSelect", moveIndex = 1 }))
-  T.check(select(1, chipUnder(plain, "FIRE")) == nil,
-          "TYPE COLOUR off draws no chip")
+  T.check(select(1, inkOf(plain, "FIRE")) == nil,
+          "TYPE COLOUR off tints nothing")
   T.check(findText(plain, "FIRE") ~= nil, "and the type still reads")
+  T.check(select(1, cellInk(plain, "FIX EM")) == nil,
+          "the buttons go back to black with it")
+  run.loader.modOptions["Gen1BattleUI"] = nil
+end
+
+-- The small face is a TTF, which really is drawn in the current colour, so
+-- it takes the same ink without going near a shader.
+do
+  run.loader.modOptions["Gen1BattleUI"] = { full_names = true }
+  local drawn = record(fakeBattle({ phase = "moveSelect", moveIndex = 1,
+    moves = {
+      { id = "LONG_A", pp = 10, ppUps = 0 }, { id = "FIX_EMBERISH", pp = 25, ppUps = 0 },
+      { id = "LONG_C", pp = 10, ppUps = 0 }, { id = "LONG_D", pp = 10, ppUps = 0 },
+    } }))
+  local ink, label
+  for _, t in ipairs(drawn.text) do
+    if t.small and t.text == "FIX EMBER" then ink, label = t.ink, t end
+  end
+  T.check(label ~= nil, "FULL NAMES prints the name through the small face")
+  T.check(ink ~= nil, "and colours it the same way")
+  T.check(ink and ink[1] > ink[3], "in FIRE's own ink")
   run.loader.modOptions["Gen1BattleUI"] = nil
 end
 

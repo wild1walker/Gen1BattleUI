@@ -1,5 +1,26 @@
 # Changelog
 
+## 1.2.2
+
+- **The colour is in the letters now, not behind them.** 1.2.1 put the type on
+  a coloured chip because a tile glyph is black on transparent and `setColor`
+  cannot reach it. It can be reached — with a shader that throws each glyph's
+  RGB away and keeps only its alpha, so the glyph becomes a stencil and the
+  stencil is filled with the type's colour. Same tile sheet, same font, same
+  pixels; different ink. No chip is drawn any more.
+- **The move names on the buttons are coloured too, by their own type.** So
+  the grid reads as four types at a glance and the panel says which one you
+  are on. The panel colours the word `FIRE`; the buttons colour the names.
+- The palette is darker than the familiar type colours, because these are the
+  letters rather than a field behind them — `ICE` and `ELECTRIC` at their
+  usual brightness are close to invisible as text on a white box.
+- `FULL NAMES` takes the same ink without going near the shader: a TTF glyph
+  really is drawn in the current colour.
+- A host with no `love.graphics.newShader` draws the letters black and loses
+  the colour, which is the picture this mod drew before it had any. A type
+  this mod has no colour for — a mod's own — is left black as well.
+  **`TYPE COLOUR`** turns the whole thing off.
+
 ## 1.2.1
 
 - **The panel reads the move name whole again, and is three rows.** 1.2.0 cut

@@ -109,16 +109,30 @@ That is the real price of the layout, and it is paid back rather than hidden.
 The panel above the grid carries the highlighted move's name, its type and its
 PP — which the vanilla list never showed all at once either.
 
-The panel keeps the footprint of the vanilla box it stands in for, `(0,8)`
-11×5, and that is not a style choice. `DrawPlayerHUDAndHPBar` puts the name,
-level, HP bar, HP numbers and underline across rows 7–11 from x=72 rightwards,
-so a panel any wider covers the player's own HP while they are choosing a
-move. It is also what keeps everything *else* clear: anything another mod
-draws on that side of the screen — an EXP bar, for one — was laid out around
-the vanilla box, not around this one.
+The panel stands where the vanilla `TYPE/PP` box stood, `(0,8)`, and is
+fourteen tiles by five: twelve interior glyphs, which is exactly the length of
+Gen 1's longest move name, so it never cuts. Name, type and PP each get a row
+of their own. Fourteen is the narrowest that can promise that, and it stops 48
+pixels short of the full width — which keeps it clear of the player's own HP
+numbers on the right.
 
-So the panel is nine glyphs against the cell's seven — which is still not
-twelve, and twelve is what Gen 1's longest move names are.
+### The type is coloured, and so are the names
+
+The move's type reads in that type's own colour in the panel, and each
+button's move name reads in its own — so the grid is four types at a glance
+and the panel says which one the cursor is on.
+
+The letters themselves are coloured, not a field behind them. That takes a
+shader: a tile glyph is black on transparent, so `setColor` cannot tint one,
+and the way through is to throw the glyph's RGB away and keep only its alpha.
+The glyph becomes a stencil and the stencil is filled with the type's colour —
+same tile sheet, same font, same pixels, different ink.
+
+The palette is darker than the familiar type colours, because these are
+letters on a white box rather than a chip behind them; `ICE` and `ELECTRIC` at
+their usual brightness are close to unreadable as text. A host with no
+`love.graphics.newShader`, and a type this mod has no colour for, both draw
+plain black. **`TYPE COLOUR`** turns it off.
 
 ### Which is why there is a second font
 
@@ -136,10 +150,12 @@ glyphs still fit wins.
 A grid takes it for **all four names or none** — `GUST` in one font beside
 `THUNDERSHOCK` in another reads as a fault, not a choice. So a party whose
 names all fit is vanilla to the pixel, the command menu never moves, and the
-wide layout never reaches for it. **`FULL NAMES`** turns it off.
+wide layout never reaches for it. **`FULL NAMES`** — off by default, because
+the panel above already reads the whole name in the game's own font — turns it
+on.
 
-**`MOVE PANEL`** in the mod manager turns it off and gives the picture behind
-it back.
+**`MOVE PANEL`** in the mod manager turns the panel off and gives the picture
+behind it back.
 
 ### Widescreen too
 
@@ -162,8 +178,9 @@ panel keeps its ten tiles on the right.
 
 | Row | Default | What it does |
 | --- | --- | --- |
-| `FULL NAMES` | on | Move names in the engine's Plain Pixel when they will not fit the tile font, so they print whole. Off is the game's own font always, and long names are cut to the cell. |
-| `MOVE PANEL` | on | The name, type and PP of the highlighted move, above the grid, in the vanilla `TYPE/PP` box's footprint. Off gives the picture behind it back — and, on the wide layout, gives its ten tiles to the grid, because a strip that stops short of the screen edge is a hole in the frame rather than a saving. |
+| `MOVE PANEL` | on | The name, type and PP of the highlighted move, above the grid, where the vanilla `TYPE/PP` box stood. Off gives the picture behind it back — and, on the wide layout, gives its tiles to the grid, because a strip that stops short of the screen edge is a hole in the frame rather than a saving. |
+| `TYPE COLOUR` | on | The type in the panel and each move name on its button, in that type's own colour, drawn through a shader that inks the game's own glyphs. Off is plain black text. |
+| `FULL NAMES` | off | Move names in the engine's Plain Pixel when they will not fit the tile font, so they print whole in the buttons too. Off — the default — is the game's own font always, cut to the cell, and the panel above is what reads the whole name. |
 
 ---
 
@@ -188,6 +205,10 @@ panel keeps its ten tiles on the right.
 - **`THROW ROCK` is cut in a Safari battle** — ten glyphs against seven. It
   reads `THROW.`, with the trailing space taken off the cut rather than left
   as `THROW .`. The wide layout has room and prints it whole.
+- **The colour needs a shader,** which is the one thing here that a host can
+  simply not have. Without `love.graphics.newShader` the letters are black and
+  everything else is unchanged — which is the picture this mod drew before it
+  had any colour at all.
 - **The overlay draws after the palette pass,** so the buttons are black on
   white and are not recoloured by a `COLORS` zone the way the vanilla strip's
   border is. On the default look this is the same picture; under a mode that
