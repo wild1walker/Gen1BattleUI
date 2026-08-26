@@ -1,2 +1,6 @@
 dist/
 *.zip
+
+# A stray copy of this repo inside itself, from a mistyped test-harness
+# copy.  Ignored so it cannot be committed as a gitlink a second time.
+mods/
