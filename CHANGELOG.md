@@ -1,5 +1,26 @@
 # Changelog
 
+## 1.6.1
+
+- **The XP bar no longer shows through the level-up pop-up.** `battle.overlay`
+  fires whenever the battle *draws*, and the battle keeps drawing while another
+  state is on top of it — that is how the level-up stat window appears over the
+  fight rather than over nothing. For most of what this mod draws that costs
+  nothing, because the state above draws second and covers it. The bar is the
+  exception: the wide layout's fill is marked `trueColor`, and a `trueColor`
+  rectangle is spliced onto the pass's zone list and re-blits its region **raw**
+  once the pass is composed. The battle and everything pushed over it share one
+  pass and one canvas, so that strip came back over the window.
+
+  The bar now stands down while anything is standing on the battle. A stack it
+  cannot read leaves the bar drawn — this is a guard against covering
+  something, not a licence to blank the HUD if the shape of the game is not
+  what is expected here.
+
+Every reason the bar has not to draw is collected into `XP.wouldDraw`, published
+as `mod.exports.xpBarWouldDraw`, so the question can be asked without a canvas
+to answer it on.
+
 ## 1.6.0
 
 Gen1WildUI carried this as an overlay while it was ahead of a release here; it

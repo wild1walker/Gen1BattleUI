@@ -1560,4 +1560,58 @@ do
   T.neq(bare[1], bare[2], "the hold-to-scroll case is actually different")
 end
 
+-- ------- the XP bar stands down while something covers the battle
+
+do
+  -- `battle.overlay` fires whenever the battle DRAWS, and the battle keeps
+  -- drawing while another state is on top of it -- that is how the level-up
+  -- stat window appears over the fight rather than over nothing.
+  --
+  -- For most of what this mod draws that costs nothing: the state above draws
+  -- second and covers it.  The bar is the exception, because the wide bar's
+  -- fill is marked trueColor, and a trueColor rect is spliced onto the pass's
+  -- zone list and re-blits its region RAW once the pass is composed.  The
+  -- battle and everything pushed over it share one pass and one canvas, so
+  -- that strip came back over the window -- reported as the XP bar showing
+  -- through the level-up pop-up, with wide battles in the screenshots, which
+  -- is the layout that marks one.
+  local wouldDraw = exports.xpBarWouldDraw
+  T.eq(type(wouldDraw), "function", "the bar publishes what it would do")
+
+  local stack = { states = {} }
+  function stack:top() return self.states[#self.states] end
+  local battle = {
+    isBattle = true,
+    player = { mon = { hp = 20, stats = { hp = 20 } } },
+    game = { stack = stack },
+  }
+
+  stack.states[1] = battle
+  T.check(wouldDraw(battle), "the bar draws with the battle on top")
+
+  stack.states[2] = { statBox = true }
+  T.check(not wouldDraw(battle),
+    "and stands down with the level-up window over it")
+
+  stack.states[2] = nil
+  T.check(wouldDraw(battle), "and comes back when the window is dismissed")
+
+  -- A stack it cannot read is not a reason to blank the HUD: this guard is
+  -- against covering something, not a licence to disappear if the shape of
+  -- the game is not what is expected here.
+  T.check(wouldDraw({ isBattle = true, player = battle.player }),
+    "no stack at all leaves the bar drawn")
+  T.check(wouldDraw({ isBattle = true, player = battle.player,
+                      game = { stack = { top = function() error("no") end } } }),
+    "and so does a stack that raises when asked")
+
+  -- the refusals that were already there still refuse
+  T.check(not wouldDraw({ isBattle = true, player = battle.player,
+                          game = { stack = stack }, safari = true }),
+    "a SAFARI battle has no bar")
+  T.check(not wouldDraw({ isBattle = true, game = { stack = stack } }),
+    "nor has one with no player mon")
+  stack.states[1] = nil
+end
+
 T.finish("Gen1BattleUI")
