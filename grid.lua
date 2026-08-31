@@ -405,7 +405,15 @@ return function(mod, C)
     if type_ and rows[line] then
       local text, ty = C.shorten(type_, width), rows[line]
       local ink = C.option("type_colour", true) and C.typeInk(def and def.type)
+      -- On a themed box the ink has to leave the palette pass or it comes out
+      -- grey; C.onDark lays the matte, lifts the colour and hands back the
+      -- mark, and answers nil everywhere that is not a DARK ADVANCED build.
+      local mark
+      local darkInk, done = C.onDark(ink, { x = x, y = ty,
+                                            w = C.width(text), h = C.ROW })
+      if darkInk then ink, mark = darkInk, done end
       C.inked(ink, function() Font.draw(text, x, ty) end)
+      if mark then mark() end
       line = line + 1
     end
     put(ppText(def, move))
@@ -430,7 +438,12 @@ return function(mod, C)
     if type_ then
       local text = C.shorten(type_, 64)
       local ink = C.option("type_colour", true) and C.typeInk(def.type)
+      local mark
+      local darkInk, done = C.onDark(ink, { x = 232, y = 128,
+                                            w = C.width(text), h = C.ROW })
+      if darkInk then ink, mark = darkInk, done end
       C.inked(ink, function() Font.draw(text, 232, 128) end)
+      if mark then mark() end
     end
   end
 

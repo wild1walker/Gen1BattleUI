@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.6.0
+
+Gen1WildUI carried this as an overlay while it was ahead of a release here; it
+shipped in the bundle's 1.22.0. Same code, in the mod that owns it.
+
+- Coloured ink on a themed battle box leaves the palette pass instead of coming
+  out grey. `C.onDark` lays the matte, lifts the colour and hands back the mark;
+  it answers nil anywhere that is not a `DARK` `ADVANCED` build, so nothing
+  changes on any other build — and with no theme provider installed there is no
+  `DARK` build to be on, which is every standalone install.
+- `C.faceHeight` measures the small face rather than assuming a tile row, so a
+  coloured label claims the rectangle it actually occupies.
+
+**Inert standalone**, like the matte changes in the box and party screens: the
+code is here so it lives with the feature rather than in a bundle's overlay.
+
 ## 1.5.2
 
 - **The level-up stat box came up over a blank text box again when Gen1WildQOL's

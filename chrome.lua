@@ -57,6 +57,20 @@ return function(mod)
 
   function C.white() love.graphics.setColor(1, 1, 1, 1) end
 
+  -- One row of the tile font, which is also the row a button's label sits on.
+  C.ROW = 8
+
+  -- The small face's real height, for the rectangle a coloured label claims.
+  -- Falls back to a tile row, which is what the face is standing in for.
+  function C.faceHeight(small)
+    local font = type(small) == "table" and small.font or nil
+    if font and font.getHeight then
+      local ok, h = pcall(font.getHeight, font)
+      if ok and type(h) == "number" and h > 0 then return h end
+    end
+    return C.ROW
+  end
+
   function C.option(key, fallback)
     local ok, value = pcall(function() return mod.options:get(key) end)
     if not ok or value == nil then return fallback end
@@ -174,6 +188,103 @@ return function(mod)
   function C.typeInk(id)
     if type(id) ~= "string" then return nil end
     return TYPE_INK[(id:upper():gsub("_TYPE$", ""))]
+  end
+
+  -- ------- the same letters on a DARK box
+  --
+  -- A type ink is a real RGB colour drawn onto the canvas, and it survived
+  -- because a classic battle hands the renderer NO ZONE LIST: with nothing to
+  -- colorize, `Renderer:blitCanvas` blits the canvas raw and the letters keep
+  -- the colour this file gave them.
+  --
+  -- UI THEME = DARK ends that.  The theme paints a panel over every box a
+  -- battle draws -- which is how the command grid goes dark at all -- and a
+  -- panel is a four-shade palette.  Once one covers these letters they are
+  -- read as four DMG shades off their RED channel and repainted out of that
+  -- palette, so RAZOR LEAF's green and VINE WHIP's green and TACKLE's olive
+  -- all come out as whatever shade their red channel happened to land on.
+  -- Grey letters, in four slightly different greys.
+  --
+  -- No palette can carry an arbitrary colour, so the only way to keep one is
+  -- to leave the palette pass: `markTrueColor` claims the letters' rectangle
+  -- and the renderer re-blits it raw over the shaded pass.  Raw means raw,
+  -- which is the whole of why this is three steps rather than one:
+  --
+  --   1. paint the theme's matte into the rectangle, or the raw re-blit
+  --      brings back the WHITE the box cleared to and puts a white label
+  --      plate on a black button;
+  --   2. draw the letters at FULL STRENGTH -- the table above is deliberately
+  --      dark because it was written for black ink on a white box, and those
+  --      same inks on a black button are both unreadable and drab;
+  --   3. mark the rectangle, so what was just drawn is what is shown.
+  --
+  -- ADVANCED only, and that is not a limitation to apologise for: a mark is
+  -- discarded outside it (`PaletteFX.honorsTrueColor`), so painting the matte
+  -- there would put a black plate through the shade pass and make a hole in
+  -- the button.  Elsewhere the letters go through the palette as they do
+  -- today, which is legible -- just not coloured.
+  -- Wound up to full strength, hue untouched.
+  --
+  -- 0.29.3 mixed these halfway to white, which made them legible and drab:
+  -- a GRASS move came out the colour of sage rather than of grass.  Mixing
+  -- toward white is the wrong move because it takes the SATURATION out --
+  -- every ink converges on the same pale wash, which is exactly the
+  -- complaint.
+  --
+  -- Scaling to the brightest channel does the opposite: the ratios between
+  -- the three channels are what the hue IS, so multiplying all three by the
+  -- same gain leaves the hue exactly where it was and spends the headroom on
+  -- vividness instead.  GRASS's 46/125/50 becomes 94/255/102 -- the green of
+  -- the type charts rather than a tint of it -- and the dark end of the
+  -- table gains the most, which is where it was needed.
+  local function vivid(shade)
+    local peak = math.max(shade[1], shade[2], shade[3])
+    if peak <= 0 then return { 255, 255, 255 } end
+    local gain = 255 / peak
+    return { shade[1] * gain, shade[2] * gain, shade[3] * gain }
+  end
+
+  -- The colour to lay under the letters, or nil for "nothing to do here".
+  -- Three ways to answer nil and each is a whole build that pays nothing: no
+  -- theme, LIGHT, or a mode that discards the mark anyway.
+  local function mattePaint()
+    local theme = type(mod.theme) == "function" and mod.theme() or nil
+    if type(theme) ~= "table" or type(theme.read) ~= "function" then
+      return nil
+    end
+    if theme.read() ~= "dark" or type(theme.matte) ~= "function" then
+      return nil
+    end
+    local okFX, PaletteFX = pcall(require, "src.render.PaletteFX")
+    if not okFX or type(PaletteFX) ~= "table" then return nil end
+    if type(PaletteFX.honorsTrueColor) == "function"
+        and not PaletteFX.honorsTrueColor() then
+      return nil
+    end
+    local colour = theme.matte()
+    if type(colour) ~= "table" or #colour < 3 then return nil end
+    return colour, PaletteFX
+  end
+
+  -- Claim `rect` for a coloured label: paint it, and hand back the ink to use
+  -- and the call that marks it once the letters are down.  nil, nil when this
+  -- build has nothing to claim, and every caller then draws as it always did.
+  function C.onDark(shade, rect)
+    if not (shade and type(rect) == "table"
+            and (rect.w or 0) > 0 and (rect.h or 0) > 0) then
+      return nil
+    end
+    local colour, PaletteFX = mattePaint()
+    if not colour then return nil end
+    love.graphics.setColor(colour[1] / 255, colour[2] / 255,
+                           colour[3] / 255, 1)
+    love.graphics.rectangle("fill", rect.x, rect.y, rect.w, rect.h)
+    C.white()
+    return vivid(shade), function()
+      if type(PaletteFX.markTrueColor) == "function" then
+        PaletteFX.markTrueColor(rect.x, rect.y, rect.w, rect.h)
+      end
+    end
   end
 
   -- Run `draw` with its glyphs stencilled in `shade`.  No shade, or no
@@ -317,17 +428,28 @@ return function(mod)
       local lx = x + math.max(0, math.floor((width - w) / 2))
       -- a TTF glyph really is drawn in the current colour, so the small face
       -- needs no shader: setting the ink is enough
-      if label.ink then C.inkBytes(label.ink) else C.black() end
+      local sy = y + (small.yOffset or 0)
+      local ink, mark = label.ink, nil
+      local darkInk, done = C.onDark(ink, { x = lx, y = sy, w = w,
+                                            h = C.faceHeight(small) })
+      if darkInk then ink, mark = darkInk, done end
+      if ink then C.inkBytes(ink) else C.black() end
       local prev = love.graphics.getFont and love.graphics.getFont()
       love.graphics.setFont(small.font)
-      love.graphics.print(tostring(text), lx, y + small.yOffset)
+      love.graphics.print(tostring(text), lx, sy)
       if prev then love.graphics.setFont(prev) end
       C.black()
+      if mark then mark() end
       return
     end
     local text = C.shorten(label.text, width)
-    local lx = x + math.max(0, math.floor((width - C.width(text)) / 2))
-    C.inked(label.ink, function() Font.draw(text, lx, y) end)
+    local w = C.width(text)
+    local lx = x + math.max(0, math.floor((width - w) / 2))
+    local ink, mark = label.ink, nil
+    local darkInk, done = C.onDark(ink, { x = lx, y = y, w = w, h = C.ROW })
+    if darkInk then ink, mark = darkInk, done end
+    C.inked(ink, function() Font.draw(text, lx, y) end)
+    if mark then mark() end
   end
 
   -- True when this face would print `text` whole in `width`, which is the
