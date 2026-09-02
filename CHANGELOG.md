@@ -1,5 +1,40 @@
 # Changelog
 
+## 1.7.0
+
+- **The XP bar draws on a voxel mod's battle again.** A voxel fork draws the
+  fight in 3D over the map and moves the HUDs onto its own window-sized world
+  canvas. A bar left behind in the GB frame is a blue line floating in the
+  wrong place; a bar drawn in 160x144 coordinates onto a window-sized canvas is
+  worse. So the bar asks, every frame, whether the HUDs really were moved this
+  frame, and follows them onto the fork's canvas when they were.
+
+  The answer is no unless a fork explicitly says yes: with no voxel mod, and
+  under a fork that leaves the HUDs in the frame, the classic path runs
+  unchanged. A fork that moves them but publishes no geometry gets no bar for
+  the frame rather than a bar guessed onto the wrong canvas. The canvas is put
+  back even if the paint raises, so a bar that fails once cannot leave the rest
+  of the battle drawing into the world image.
+
+  This needs `mod.voxel`, which the Gen1WildUI bundle supplies. Standalone it
+  is absent, every use is guarded, and the classic path is what runs.
+
+- **No line across the move panel's PP row.** The panel is drawn after the bar
+  and covers it, and drawing the bar first was taken to be the whole fix. It is
+  the whole fix for the pixels and not for the mark: `markTrueColor` re-blits
+  its region **raw** after the pass composes, so the length of bar lying under
+  the panel came back on top of it, as a line across the PP row. Draw order
+  cannot reach that. The bar now stops where the panel starts and marks only
+  what it drew. The panel is fourteen tiles and the bar runs to 147, so the bar
+  is shorter, never absent.
+
+- **The type line's mark no longer clips the top of PP.** A full-height mark's
+  surrounding art zone is one pixel larger than the mark, which put its bottom
+  edge on the PP line's first pixel row and mapped that row's ink to black.
+  Marks that own a text row now use `C.MARK_ROW`, one shorter than the row, so
+  the ring lands inside the row it belongs to.
+
+
 ## 1.6.1
 
 - **The XP bar no longer shows through the level-up pop-up.** `battle.overlay`

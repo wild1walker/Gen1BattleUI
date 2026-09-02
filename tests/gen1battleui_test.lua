@@ -987,12 +987,23 @@ do
   T.check(bar and panelBox and bar.seq < panelBox.seq,
           "and the bar goes down BEFORE it, so the panel covers it")
 
-  -- the part that used to show: the bar starts left of where the panel ends,
-  -- which is exactly why drawing it first is what fixes this and clipping to
-  -- the vanilla 88 did not
-  T.eq(bar and bar.x, 87, "the bar starts at 87, as reported")
-  T.check(bar and panelBox and bar.x < (panelBox.tx + panelBox.tw) * 8,
-          "the bar really does run under the panel rather than beside it")
+  -- The bar used to run on under the panel and be covered by it, and drawing
+  -- it first was taken to be the whole fix.  It is the whole fix for the
+  -- PIXELS and not for the MARK.
+  --
+  -- `PaletteFX.markTrueColor` splices the marked rect onto the pass's zone
+  -- list and RE-BLITS THAT REGION RAW once the pass is composed -- after
+  -- everything drawn over it in the meantime, the panel included.  So the
+  -- length of bar lying under the panel came back on top of it: the bar's own
+  -- rows 89 and 90 reappearing as a line across the panel's PP row.  Draw
+  -- order cannot reach that, because the re-blit happens after all of it.
+  --
+  -- So the bar now stops where the panel starts, and marks only what it drew.
+  -- The panel is fourteen tiles (x < 112) and the bar runs to 147, so there is
+  -- always a bar left after the clip -- it is shorter, never absent.
+  T.eq(bar and bar.x, 112, "the bar starts at the panel's right edge")
+  T.check(bar and panelBox and bar.x >= (panelBox.tx + panelBox.tw) * 8,
+          "and no longer runs under the panel, so nothing re-blits over PP")
   -- the old clip was to 88, the vanilla panel's edge, and this panel's edge
   -- is 112: those 24 pixels were the report
   T.check(panelBox and (panelBox.tx + panelBox.tw) * 8 == 112,
