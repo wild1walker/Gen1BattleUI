@@ -316,6 +316,19 @@ funnel and arguing about it.
 
 ---
 
+## On Gold, Silver and Crystal
+
+The battle screen runs on the Gen 2 carts too. Gold's own battle menu is a
+2x2 already, so what lands there is the rest of it: the move grid with each
+move's type colour behind it, the HUD kept readable when the page is dark, and
+the same rules about what stays the cart's.
+
+The move grid is its own file there rather than the Kanto one with different
+coordinates — Gold lays its four moves out differently, and re-deriving the
+placement from the cart is what keeps a move name from sitting a tile off.
+
+Everything is a row you can switch off, as on Red.
+
 ## Options
 
 | Row | Default | What it does |

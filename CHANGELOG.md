@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.8.0
+
+- **Runs on Gold, Silver and Crystal.** The manifest declares `gen2`. Gold's
+  battle menu is already a 2x2, so what lands there is the rest: the move grid
+  with each move's type colour behind it, and the HUD kept readable when the
+  page is dark. The grid is its own file rather than the Kanto one with new
+  coordinates — Gold lays its four moves out differently, and re-deriving the
+  placement from the cart is what keeps a name from sitting a tile off.
+
+- **Two dated assertions removed from the suite.** With `LEVEL-UP BOX` off this
+  mod stands fully down, so what the message line and the window do from there
+  is the engine's answer — `msgHold` is `BattleState`'s field and this mod only
+  reads it. Two checks named the values the engine used to leave, and had been
+  failing since it stopped clearing the line on that press. They are gone
+  rather than re-pinned to today's values, which would only date the same way;
+  the assertions that test *this mod* are untouched.
+
+
 ## 1.7.0
 
 - **The XP bar draws on a voxel mod's battle again.** A voxel fork draws the
