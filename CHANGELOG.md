@@ -1,5 +1,36 @@
 # Changelog
 
+## 1.8.1
+
+- **The EXP bar had a black box drawn round it under DARK, and a level-up took
+  the rest of the frame's colour with it.** Reported twice, alongside the
+  caught indicator.
+
+  The theme paints a one-pixel ring round every true-colour mark inside a box
+  (Gen1WildUI `runtime/theme.lua`). That is right for art it did not draw — a
+  raw-blitted icon whose edge bleeds a sliver of the paper behind it — and
+  wrong for everything in this file, which paints its own flat colour and
+  knows exactly which pixels it painted. The bar is one rect, so its ring was
+  a complete outline round it, on the light HUD panel.
+
+  Both the bar and the burst mark through the theme's **flat mark** now, which
+  records the rect — the ART_PAGE zone is what keeps the colour — and draws
+  nothing round it. Reached by name, falling back to the ordinary mark, so a
+  standalone install with no theme behaves exactly as before.
+
+- **The level-up burst marked 192 rectangles in a single frame.** Twenty-four
+  pixels a particle, eight particles, against the theme's cap of forty —
+  so everything past the fortieth mark got no zone and came back unthemed,
+  which on a level-up is the bar's own mark and the caught indicator's.
+
+  `EXP_BURST_TILE_ROWS` is a circle, and a circle that size is exactly three
+  rectangles: a 2-wide upright, a 6-wide crossbar and a 4-wide square. Their
+  union is precisely the pixels it draws — none left out, none claimed that it
+  does not — so the marks stay honest and eight particles cost 24 rects
+  instead of 192. `tests/burstmark_test.lua` reads both the tile rows and the
+  claims out of the source and compares the two sets; every one-column and
+  one-row mutation of the decomposition fails it.
+
 ## 1.8.0
 
 - **Runs on Gold, Silver and Crystal.** The manifest declares `gen2`. Gold's
