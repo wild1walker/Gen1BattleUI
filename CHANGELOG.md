@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.8.2
+
+- **The Bug-Catching Contest gets the battle grid.** Reported as "during the
+  Bug-Catching Contest the battle UI doesn't work". The contest's menu was the
+  one Gold battle menu left on the cart's own list, because its third label is
+  `PARKBALL` and a count — `PARKBALL×20`, eleven glyphs where a button has
+  room for seven — and the grid's labels are cut to fit. A cut from the end
+  loses the count, which is the part a player reads, so the contest stood
+  down; and the cart's list in the middle of a grid-shaped battle is what
+  looked broken.
+
+  The label is now fitted from the front: the count stays whole and the name
+  gives way to it (`PARK×20`). Every other label fits as it always did.
+
 ## 1.8.1
 
 - **The EXP bar had a black box drawn round it under DARK, and a level-up took
